@@ -1,0 +1,200 @@
+From 7ca742be5077ec20fa9d93f8b073eb776892b66b Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Sun, 4 Oct 2026 16:03:41 +0200
+Subject: [PATCH 3/3] rf35h: target and image for the XiFan RF35H
+
+batocera-rf35h only. configs/batocera-rf35h.board is the RK3326 board
+with two images from the same system:
+
+- rf35h: the loader the RF35H is known to boot with (AURKNIX-RK3326
+  20260809, bytes 32K..16M: DDR at 786 MHz, U-Boot 2025.10 with bootstd),
+  checked against its sha256; boot.scr hands over to extlinux.conf
+  (that U-Boot only runs scripts), console on ttyS1. apply.sh copies the
+  loader into rf35h/loader/.
+- mainline: Batocera's own image, to try the RF35H as upstream would
+  ship it.
+
+No Kodi, no legacy hardkernel U-Boot (no image of ours uses it), the
+rf35h slim switch, and a zstd squashfs (as on most of Batocera's ARM
+boards; the RK3326 kernel has SQUASHFS_ZSTD): boot.tar.xz has to stay
+under the 2 GiB GitHub allows for a release file.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../rockchip/rk3326/rf35h/boot/boot.cmd       |  8 +++
+ .../rk3326/rf35h/create-boot-script.sh        | 52 +++++++++++++++++++
+ .../rk3326/rf35h/extlinux/extlinux.conf       |  5 ++
+ .../rockchip/rk3326/rf35h/genimage.cfg        | 43 +++++++++++++++
+ configs/batocera-rf35h.board                  | 22 ++++++++
+ 5 files changed, 130 insertions(+)
+ create mode 100644 board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd
+ create mode 100755 board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh
+ create mode 100644 board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf
+ create mode 100644 board/batocera/rockchip/rk3326/rf35h/genimage.cfg
+ create mode 100644 configs/batocera-rf35h.board
+
+diff --git a/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd b/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd
+new file mode 100644
+index 0000000..0f3d61d
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd
+@@ -0,0 +1,8 @@
++# batocera-rf35h: the RF35H's loader (U-Boot 2025.10, bootstd) runs boot
++# scripts only; this one hands over to extlinux.conf. The addresses are
++# those of Batocera's mainline boot.ini: the kernel is an uncompressed
++# Image of tens of MB, and at the loader's kernel_addr_r (0x02080000) it
++# would run over the device tree.
++setenv kernel_addr_r "0x09000000"
++setenv fdtoverlay_addr_r "0x08000000"
++sysboot ${devtype} ${devnum}:${distro_bootpart} any 0x100000 /extlinux/extlinux.conf
+diff --git a/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh b/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh
+new file mode 100755
+index 0000000..9ab1a32
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh
+@@ -0,0 +1,52 @@
++#!/bin/bash
++
++# batocera-rf35h: the boot partition of the XiFan RF35H image.
++#
++# The loader is the one the RF35H is known to boot with: bytes 32K..16M of
++# the AURKNIX-RK3326 20260809 SD image (DDR init at 786 MHz, miniloader,
++# U-Boot 2025.10 with bootstd, BL31). apply.sh copies it into loader/; it is
++# checked here against its sha256, since a loader that does not start shows
++# nothing at all. That U-Boot runs boot scripts only, so boot.scr hands over
++# to extlinux.conf.
++
++# HOST_DIR = host dir
++# BOARD_DIR = board specific dir
++# BUILD_DIR = base dir/build
++# BINARIES_DIR = images dir
++# TARGET_DIR = target dir
++# BATOCERA_BINARIES_DIR = batocera binaries sub directory
++
++HOST_DIR=$1
++BOARD_DIR=$2
++BUILD_DIR=$3
++BINARIES_DIR=$4
++TARGET_DIR=$5
++BATOCERA_BINARIES_DIR=$6
++
++LOADER="${BOARD_DIR}/loader/known-good.bin"
++LOADER_SHA256="52850532f1e1ab8bd96d8557533d6cffe72c0ec920b55eb8cdb2eb1b4de71321"
++
++if [ "$(sha256sum "${LOADER}" 2>/dev/null | cut -d' ' -f1)" != "${LOADER_SHA256}" ]; then
++    echo "rf35h: ${LOADER} is missing or is not the known-good loader" >&2
++    exit 1
++fi
++# genimage.cfg takes it from the images dir
++cp "${LOADER}" "${BINARIES_DIR}/rf35h-loader.bin" || exit 1
++
++mkdir -p "${BATOCERA_BINARIES_DIR}/boot/boot"     || exit 1
++mkdir -p "${BATOCERA_BINARIES_DIR}/boot/extlinux" || exit 1
++
++cp "${BINARIES_DIR}/Image"      "${BATOCERA_BINARIES_DIR}/boot/linux"      || exit 1
++cp "${BINARIES_DIR}/initrd.lz4" "${BATOCERA_BINARIES_DIR}/boot/initrd.lz4" || exit 1
++
++cp "${BINARIES_DIR}/rootfs.squashfs" "${BATOCERA_BINARIES_DIR}/boot/boot/batocera.update"     || exit 1
++cp "${BINARIES_DIR}/rufomaculata"    "${BATOCERA_BINARIES_DIR}/boot/boot/rufomaculata.update" || exit 1
++
++cp "${BINARIES_DIR}/rk3326-xifan-rf35h.dtb"  "${BATOCERA_BINARIES_DIR}/boot/"          || exit 1
++cp "${BOARD_DIR}/extlinux/extlinux.conf"     "${BATOCERA_BINARIES_DIR}/boot/extlinux/" || exit 1
++
++"${HOST_DIR}/bin/mkimage" -C none -A arm64 -T script -n "batocera-rf35h" \
++    -d "${BOARD_DIR}/boot/boot.cmd" \
++    "${BATOCERA_BINARIES_DIR}/boot/boot.scr" || exit 1
++
++exit 0
+diff --git a/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf b/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf
+new file mode 100644
+index 0000000..7789318
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf
+@@ -0,0 +1,5 @@
++LABEL BATOCERA
++  LINUX /linux
++  INITRD /initrd.lz4
++  FDT /rk3326-xifan-rf35h.dtb
++  APPEND label=BATOCERA console=ttyS1,1500000 console=tty3 quiet loglevel=0 consoleblank=0 vt.global_cursor_default=0 uboot.hwid_adc=${hwid_adc}
+diff --git a/board/batocera/rockchip/rk3326/rf35h/genimage.cfg b/board/batocera/rockchip/rk3326/rf35h/genimage.cfg
+new file mode 100644
+index 0000000..c6693cc
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/rf35h/genimage.cfg
+@@ -0,0 +1,43 @@
++image boot.vfat {
++        vfat {
++                extraargs = "-F 32 -n BATOCERA"
++		@files
++        }
++        size = 8G
++}
++
++image userdata.ext4 {
++	ext4 {
++		label = "SHARE"
++		use-mke2fs = "true"
++		extraargs = "-m 0"
++	}
++	size = "512M"
++	mountpoint = "/userdata"
++}
++
++image batocera.img {
++	hdimage {
++		align = "1M"
++	}
++
++	# the known-good loader, 32K..16M: idbloader, uboot.img and trust.img
++	# in Rockchip's legacy layout (copied here by create-boot-script.sh)
++	partition part_loader {
++		in-partition-table = "no"
++		image = "../../rf35h-loader.bin"
++		offset = 32K
++	}
++
++	partition vfat {
++		partition-type = 0xC
++		image = "boot.vfat"
++		offset = 16M
++		bootable = true
++	}
++
++	partition userdata {
++		partition-type = 0x83
++		image = "userdata.ext4"
++	}
++}
+diff --git a/configs/batocera-rf35h.board b/configs/batocera-rf35h.board
+new file mode 100644
+index 0000000..a5250de
+--- /dev/null
++++ b/configs/batocera-rf35h.board
+@@ -0,0 +1,22 @@
++include batocera-rk3326.board
++
++# batocera-rf35h: the XiFan RF35H only.
++#
++# Two images from the same system: rf35h, ours (the known-good loader with
++# the DDR at 786 MHz, console on ttyS1), and Batocera's mainline one, to try
++# the RF35H the way upstream would ship it (rename extlinux.conf.rf35h to
++# extlinux.conf on its boot partition).
++BR2_TARGET_BATOCERA_IMAGES="rockchip/rk3326/rf35h rockchip/rk3326/mainline"
++
++# The legacy hardkernel U-Boot only serves the rk3326, r36s and rg351v-v2 images.
++# BR2_PACKAGE_UBOOT_RK3326 is not set
++
++# Leaner package set: no Kodi, and BR2_PACKAGE_BATOCERA_RF35H_SLIM in
++# batocera-system (no current MAME, no Moonlight).
++# BR2_PACKAGE_BATOCERA_KODI21 is not set
++BR2_PACKAGE_BATOCERA_RF35H_SLIM=y
++
++# zstd instead of gzip for the system squashfs, as on most of Batocera's ARM
++# boards (the RK3326 kernel has SQUASHFS_ZSTD): a smaller boot.tar.xz, which
++# has to stay under the 2 GiB GitHub allows for a release file.
++BR2_TARGET_ROOTFS_SQUASHFS4_ZSTD=y
+-- 
+2.43.0
+

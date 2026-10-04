@@ -1,0 +1,5 @@
+# nulla di costruito sta qui: albero di Batocera e build stanno accanto
+# (batocera.linux/, batocera-rf35h-build/, batocera-rf35h-check/)
+*.img
+*.img.gz
+*.tar.zst

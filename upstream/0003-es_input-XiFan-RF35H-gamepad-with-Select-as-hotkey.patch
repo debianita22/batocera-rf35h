@@ -1,0 +1,58 @@
+From 19702d4eba6882859d9fb766d43b35449175cc4c Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Sun, 4 Oct 2026 15:57:42 +0200
+Subject: [PATCH 3/4] es_input: XiFan RF35H gamepad, with Select as hotkey
+
+The RF35H has no function key: besides the D-pad, ABXY, the shoulders,
+Select, Start and the stick clicks there are only power and reset. Its
+device tree still declares a phantom BTN_MODE to keep the numbering of
+the other retrogame joypads, so the mapping is that of retrogame_joypad
+with the hotkey on Select, as on odroidgo2_v11_joypad.
+
+GUID: bus 0x19, vendor 0x484B, product 0x1135, version 0x0100, from the
+joypad-* properties of rk3326-xifan-rf35h.dts.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../controllers/es_input.cfg                  | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg b/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg
+index 9eebeb0..fe7bc67 100644
+--- a/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg
++++ b/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg
+@@ -3737,6 +3737,29 @@
+ 		<input name="x" type="button" id="2" value="1" code="307" />
+ 		<input name="y" type="button" id="3" value="1" code="308" />
+ 	</inputConfig>
++	<inputConfig type="joystick" deviceName="XiFan RF35H Gamepad" deviceGUID="190000004b4800003511000000010000">
++		<input name="a" type="button" id="1" value="1" code="305" />
++		<input name="b" type="button" id="0" value="1" code="304" />
++		<input name="down" type="button" id="14" value="1" code="545" />
++		<input name="hotkey" type="button" id="8" value="1" code="314" />
++		<input name="joystick1left" type="axis" id="0" value="-1" code="0" />
++		<input name="joystick1up" type="axis" id="1" value="-1" code="1" />
++		<input name="joystick2left" type="axis" id="2" value="-1" code="3" />
++		<input name="joystick2up" type="axis" id="3" value="-1" code="4" />
++		<input name="l2" type="button" id="6" value="1" code="312" />
++		<input name="l3" type="button" id="11" value="1" code="317" />
++		<input name="left" type="button" id="15" value="1" code="546" />
++		<input name="pagedown" type="button" id="5" value="1" code="311" />
++		<input name="pageup" type="button" id="4" value="1" code="310" />
++		<input name="r2" type="button" id="7" value="1" code="313" />
++		<input name="r3" type="button" id="12" value="1" code="318" />
++		<input name="right" type="button" id="16" value="1" code="547" />
++		<input name="select" type="button" id="8" value="1" code="314" />
++		<input name="start" type="button" id="9" value="1" code="315" />
++		<input name="up" type="button" id="13" value="1" code="544" />
++		<input name="x" type="button" id="2" value="1" code="307" />
++		<input name="y" type="button" id="3" value="1" code="308" />
++	</inputConfig>
+ 	<inputConfig type="joystick" deviceName="8BitDo Ultimate Wireless Controller" deviceGUID="03000000c82d00000631000014010000">
+ 		<input name="a" type="button" id="1" value="1" code="305" />
+ 		<input name="b" type="button" id="0" value="1" code="304" />
+-- 
+2.43.0
+

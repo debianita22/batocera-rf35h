@@ -1,0 +1,5 @@
+# Batocera a un commit fissato: tools/apply.sh lo scarica (col sottomodulo
+# buildroot che quel commit indica) e ci applica upstream/ e fork/.
+# master del 4/10/2026 (v44 "Malachite" in sviluppo, kernel RK3326 7.2.8).
+BATOCERA_URL=https://github.com/batocera-linux/batocera.linux.git
+BATOCERA_COMMIT=3b667401d12a6109d124585a2e76a9673b432e63

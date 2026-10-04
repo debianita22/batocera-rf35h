@@ -1,0 +1,82 @@
+From 01729a7c26168ab724417b99fdfcc8485055dd21 Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Sun, 4 Oct 2026 16:02:40 +0200
+Subject: [PATCH 2/3] batocera-upgrade: rf35h updates from the GitHub releases
+
+batocera-rf35h only. The default URL is the latest release of the
+batocera-rf35h repository (apply.sh writes it in place of
+@RF35H_UPDATE_URL@). A GitHub release keeps boot.tar.xz, its .md5 and
+batocera.version at its root: with such a URL the board and update type
+are not added to the path, and since the URL no longer names the board,
+an upgrade from the network now checks the board inside the archive, as
+a media upgrade already did. Any other updates.url works as before.
+
+The SD card loader is never touched: do_bootloader_update only acts on
+SPI, Qualcomm, Raspberry Pi and Allwinner files, none of which the
+RF35H's boot partition has.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../batocera-scripts/scripts/batocera-upgrade | 21 +++++++++++++++++--
+ 1 file changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/package/batocera/core/batocera-scripts/scripts/batocera-upgrade b/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
+index 3d63ee9..fedc461 100755
+--- a/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
++++ b/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
+@@ -479,7 +479,8 @@ do_bootloader_update() {
+ #                       MAIN                        #
+ #####################################################
+ 
+-G_UPDATEURL="https://updates.batocera.org"
++# batocera-rf35h: the releases of its GitHub repository (apply.sh fills it in)
++G_UPDATEURL="@RF35H_UPDATE_URL@"
+ G_CURRENT_VERSION=$(cat /usr/share/batocera/batocera.version)
+ G_BOARD=$(cat /boot/boot/batocera.board)
+ G_TARGET_BOARD=${G_BOARD}
+@@ -505,8 +506,18 @@ test -n "${G_SETTINGSUPDATEURL}" && G_UPDATEURL="${G_SETTINGSUPDATEURL}"
+ # force a default value in case the value is removed or miswritten
+ test "${G_UPDATETYPE}" != "stable" -a "${G_UPDATETYPE}" != "unstable" -a "${G_UPDATETYPE}" != "butterfly" && G_UPDATETYPE="stable"
+ 
++# batocera-rf35h: a GitHub release keeps boot.tar.xz, its .md5 and
++# batocera.version at its root, with no board or type in the path
++is_github_release() {
++    case "${G_UPDATEURL}" in
++        https://github.com/*/releases/latest/download) return 0 ;;
++    esac
++    return 1
++}
++
+ # custom the url directory
+ G_DWD_HTTP_DIR="${G_UPDATEURL}/${G_TARGET_BOARD}/${G_UPDATETYPE}/last"
++is_github_release && G_DWD_HTTP_DIR="${G_UPDATEURL}"
+ 
+ # --- Prepare file and link downloads ---
+ ACTION="${1,,}"
+@@ -547,7 +558,11 @@ case "${ACTION}" in
+         G_PRESERVE_UPGRADE_FILES=1
+         [[ ${1,,} == "butterfly" ]] && G_UPDATETYPE=butterfly
+ 	[[ ${1,,} == "stable" ]]    && G_UPDATETYPE=stable
+-        do_upgradecheck_${TERMINAL} "${G_UPDATEURL}/${G_TARGET_BOARD}/${G_UPDATETYPE}/last/batocera.version"
++        if is_github_release; then
++            do_upgradecheck_${TERMINAL} "${G_UPDATEURL}/batocera.version"
++        else
++            do_upgradecheck_${TERMINAL} "${G_UPDATEURL}/${G_TARGET_BOARD}/${G_UPDATETYPE}/last/batocera.version"
++        fi
+         exit $?
+     ;;
+     --check-media-upgrade) # Can a file be retrieved within ES
+@@ -580,6 +595,8 @@ case "${ACTION}" in
+         check_freespace "${SIZE}" "/userdata/system /boot" || exit 1
+         download_upgrades ${TERMINAL} "${G_DWD_HTTP_DIR}" "${SIZE}" || { echo "Error: Connection failed '${G_DWD_HTTP_DIR}'"; exit 1; }
+         validate_checksum || exit 1
++        # batocera-rf35h: the URL no longer names the board, the archive does
++        validate_arch     || exit 1
+ 	do_update         || exit 1
+     ;;
+     --update-bootloader) # Flash from the installed /boot any extra bootloader or firmware files
+-- 
+2.43.0
+

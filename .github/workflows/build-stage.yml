@@ -1,0 +1,150 @@
+# Una parte della build: un job, al massimo 6 ore sui runner gratuiti. La
+# chiama build.yml fino a sei volte di fila. Ogni parte riprende lo stato della
+# precedente, costruisce fino a BUILD_MINUTES dall'inizio del job e, se non ha
+# finito, salva lo stato per la successiva (tools/ci-build.sh).
+name: Build stage
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        type: number
+        required: true
+      last:
+        description: "l'ultima parte: se non finisce, la build fallisce"
+        type: boolean
+        default: false
+      version:
+        type: string
+        required: true
+    outputs:
+      result:
+        description: "done: immagini fatte; continue: serve un'altra parte"
+        value: ${{ jobs.build.outputs.result }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Parte ${{ inputs.stage }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 358
+    outputs:
+      result: ${{ steps.build.outputs.result }}
+    env:
+      RF35H_VERSION: ${{ inputs.version }}
+      RF35H_STAGE: ${{ inputs.stage }}
+      RF35H_CONTAINER: rf35h-build
+      # 6 GB: stare nella cache delle actions (10 GB per repository)
+      CCACHE_MAXSIZE: 6G
+      # minuti dall'inizio del job in cui la build deve fermarsi: il resto
+      # (potatura, stato, upload) deve stare nelle 6 ore
+      BUILD_MINUTES: 315
+    steps:
+      - name: Inizio
+        run: |
+          echo "JOB_START=$(date +%s)" >> "${GITHUB_ENV}"
+          echo "PREV=$(( ${{ inputs.stage }} - 1 ))" >> "${GITHUB_ENV}"
+          echo "### Parte ${{ inputs.stage }} (${RF35H_VERSION})" >> "${GITHUB_STEP_SUMMARY}"
+          nproc; free -g
+
+      - uses: actions/checkout@v7
+
+      - name: Spazio su disco
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd squashfs-tools mtools device-tree-compiler u-boot-tools fdisk >/dev/null
+          ./tools/ci-build.sh disk
+
+      - name: Stato della parte precedente
+        if: inputs.stage > 1
+        uses: actions/download-artifact@v8
+        with:
+          name: state-${{ env.PREV }}.tar.zst
+          path: ${{ env.W }}/dl-state
+
+      - name: Estrai lo stato
+        if: inputs.stage > 1
+        run: ./tools/ci-build.sh unpack "${PREV}"
+
+      - name: Batocera con le patch, container
+        run: ./tools/ci-build.sh prepare
+
+      # ccache della build precedente (la parte 1; le altre la ricevono nello stato)
+      - name: ccache
+        if: inputs.stage == 1
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.W }}/work/ccache
+          key: ccache-rf35h-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.stage }}
+          restore-keys: ccache-rf35h-
+
+      - name: Build
+        id: build
+        run: ./tools/ci-build.sh build
+
+      - name: ccache, statistiche
+        if: always() && steps.build.outcome != 'skipped'
+        run: ./tools/ci-build.sh ccache-stats
+
+      - name: Log
+        if: always() && steps.build.outcome != 'skipped'
+        run: ./tools/ci-build.sh logs "${{ inputs.stage }}"
+
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.build.outcome != 'skipped'
+        with:
+          path: ${{ env.W }}/log-${{ inputs.stage }}.tar.zst
+          archive: false
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # --- non finita: lo stato per la parte successiva -------------------------
+      - name: Non finita nell'ultima parte
+        if: steps.build.outputs.result == 'continue' && inputs.last
+        run: |
+          echo "::error::la build non e' finita nemmeno nell'ultima parte"
+          exit 1
+
+      - name: Stato per la parte successiva
+        if: steps.build.outputs.result == 'continue' && !inputs.last
+        run: ./tools/ci-build.sh pack "${{ inputs.stage }}"
+
+      - uses: actions/upload-artifact@v7
+        if: steps.build.outputs.result == 'continue' && !inputs.last
+        with:
+          path: ${{ env.W }}/state-${{ inputs.stage }}.tar.zst
+          archive: false
+          retention-days: 2
+          compression-level: 0
+
+      # --- finita: immagine verificata, file della release ----------------------
+      - name: Immagini
+        if: steps.build.outputs.result == 'done'
+        run: ./tools/ci-build.sh collect
+
+      - uses: actions/upload-artifact@v7
+        if: steps.build.outputs.result == 'done'
+        with:
+          name: batocera-rf35h-${{ inputs.version }}
+          path: ${{ env.W }}/dist/
+          retention-days: 14
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v7
+        if: steps.build.outputs.result == 'done'
+        with:
+          name: batocera-rf35h-${{ inputs.version }}-upstream
+          path: ${{ env.W }}/upstream/
+          retention-days: 14
+          compression-level: 0
+
+      # La ccache alla fine di ogni parte, anche fallita: una build nuova
+      # riparte dall'ultima, non da zero. Le chiavi sono uniche; oltre i 10 GB
+      # del repository GitHub toglie le piu' vecchie.
+      - uses: actions/cache/save@v6
+        if: always() && steps.build.outcome != 'skipped'
+        with:
+          path: ${{ env.W }}/work/ccache
+          key: ccache-rf35h-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.stage }}

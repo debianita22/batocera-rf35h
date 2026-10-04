@@ -1,0 +1,51 @@
+From 9c22c09ee7b35b0c9d4b268bcf019cf3d845b28e Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Sun, 4 Oct 2026 15:58:31 +0200
+Subject: [PATCH 4/4] rk3326: boot the XiFan RF35H from the mainline image
+
+The RF35H's DTB goes on the boot partition of the mainline image, with
+an extlinux.conf.rf35h to rename into extlinux.conf, as for the other
+devices boot.scr does not detect. Its serial console is uart1 (ttyS1):
+uart2 is wired to the stick LED controller, so the generated file moves
+console= there.
+
+boot.scr does not detect the RF35H yet: its hwid ADC value is still to
+be read from a unit (uboot.hwid_adc on the kernel command line).
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../rockchip/rk3326/mainline/create-boot-script.sh       | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh b/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
+index 839160e..5cedf01 100755
+--- a/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
++++ b/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
+@@ -17,7 +17,7 @@ BATOCERA_BINARIES_DIR=$6
+ # devices booted by mainline u-boot, as ROCKNIX's RK3326 "b" image
+ DTBS="rk3326-powkiddy-rgb10x rk3326-powkiddy-rgb20s rk3326-magicx-xu10 rk3326-magicx-xu-mini-m
+       rk3326-gameconsole-eeclone rk3326-gameconsole-r36ultra rk3326-batlexp-g350 rk3326s-gkd-pixel2
+-      rk3326-odroid-go2"
++      rk3326-xifan-rf35h rk3326-odroid-go2"
+ 
+ mkdir -p "${BATOCERA_BINARIES_DIR}/boot/boot" || exit 1
+ mkdir -p "${BATOCERA_BINARIES_DIR}/boot/overlays" || exit 1
+@@ -47,7 +47,12 @@ cp "${BOARD_DIR}/extlinux/"* "${EXTLINUX}/" || exit 1
+ # boot.scr only detects some devices, the rest boot by renaming extlinux.conf.<device>
+ for DTB in ${DTBS}; do
+     if ! grep -q "${DTB}.dtb" "${BOARD_DIR}/boot/boot.ini"; then
+-        sed '/##/d;s|^.* FDT .*$|  FDT /'${DTB}'.dtb|' "${EXTLINUX}/extlinux.conf" > "${EXTLINUX}/extlinux.conf.${DTB##*-}" || exit 1
++        case "${DTB}" in
++            # the RF35H's serial console is uart1: uart2 drives its stick LED controller
++            rk3326-xifan-rf35h) CONSOLE='s|console=ttyS2,|console=ttyS1,|' ;;
++            *)                  CONSOLE='' ;;
++        esac
++        sed -e '/##/d;s|^.* FDT .*$|  FDT /'${DTB}'.dtb|' -e "${CONSOLE}" "${EXTLINUX}/extlinux.conf" > "${EXTLINUX}/extlinux.conf.${DTB##*-}" || exit 1
+     fi
+ done
+ 
+-- 
+2.43.0
+

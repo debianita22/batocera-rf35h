@@ -1,0 +1,215 @@
+# La build delle immagini e la release.
+#
+#   tag v*                   build e release con quel nome (git tag v1.0.0;
+#                            git push origin v1.0.0); un tag con trattino
+#                            (v1.1.0-rc1) e' una pre-release
+#   Run workflow (a mano)    con "version" vuota: build di prova, niente
+#                            release, le immagini restano negli artifact;
+#                            con "version": build e release, tag creato qui
+#   push su ci-test/**       build di prova, mai una release
+#
+# La build sta in fino a sei parti di 6 ore (build-stage.yml), una dopo
+# l'altra: ognuna riprende lo stato della precedente.
+#
+# La release ha l'immagine (.img.gz, prima installazione) e l'aggiornamento
+# che le console scaricano da EmulationStation (boot.tar.xz con la sua .md5 e
+# batocera.version: batocera-upgrade legge quelli dell'ultima release). Una
+# pre-release non e' "latest": le console non la vedono. L'immagine mainline
+# (la serie upstream come la spedirebbe Batocera) resta solo negli artifact.
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+    branches: ['ci-test/**']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione da pubblicare (es. v1.0.0). Vuota: build di prova, niente release"
+        type: string
+        default: ""
+      prerelease:
+        description: "Pre-release: gli aggiornamenti delle console non la vedono"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Versione e controlli
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Versione
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -eu
+          short="$(git rev-parse --short=7 HEAD)"
+          prerelease=false
+          if [ "${GITHUB_EVENT_NAME}" = push ] && [ "${GITHUB_REF_TYPE}" = tag ]; then
+            version="${GITHUB_REF_NAME}"; publish=true
+            case "${version}" in *-*) prerelease=true ;; esac
+          elif [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ] && [ -n "${IN_VERSION}" ]; then
+            version="${IN_VERSION}"; publish=true
+            prerelease="${IN_PRERELEASE:-false}"
+            # una release "latest" la scaricano tutte le console: solo dal ramo principale
+            if [ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ] && [ "${prerelease}" != true ]; then
+              echo "::error::da ${GITHUB_REF_NAME} solo pre-release: le console aggiornano all'ultima release"
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null 2>&1; then
+              echo "::error::il tag ${version} esiste gia': per ricostruirlo si fa push del tag, oppure un'altra versione"
+              exit 1
+            fi
+          else
+            version="ci-${GITHUB_RUN_NUMBER}-${short}"; publish=false
+          fi
+          case "${version}" in
+            ''|*[!A-Za-z0-9._+-]*) echo "::error::versione '${version}': solo lettere, cifre e . _ + -"; exit 1 ;;
+          esac
+          if [ "${publish}" = true ] && gh release view "${version}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::error::la release ${version} esiste gia'"
+            exit 1
+          fi
+          {
+            echo "version=${version}"
+            echo "publish=${publish}"
+            echo "prerelease=${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
+          {
+            echo "### ${version}"
+            if [ "${publish}" = true ]; then
+              echo "Release $( [ "${prerelease}" = true ] && echo 'pre-release' || echo 'latest') a fine build."
+            else
+              echo "Build di prova: nessuna release, le immagini negli artifact."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # gli stessi controlli di check.yml: un errore qui costa minuti, dopo
+      # ore di build costerebbe la build
+      - name: Strumenti
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck squashfs-tools mtools device-tree-compiler \
+            u-boot-tools fdisk zstd gcc-aarch64-linux-gnu flex bison bc libssl-dev >/dev/null
+          pip install -q --break-system-packages actionlint-py
+      - name: tools/ci-check.sh
+        run: ./tools/ci-check.sh --work "${RUNNER_TEMP}/check"
+
+  stage1:
+    needs: setup
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 1
+      version: ${{ needs.setup.outputs.version }}
+
+  stage2:
+    needs: [setup, stage1]
+    if: needs.stage1.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 2
+      version: ${{ needs.setup.outputs.version }}
+
+  stage3:
+    needs: [setup, stage2]
+    if: needs.stage2.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 3
+      version: ${{ needs.setup.outputs.version }}
+
+  stage4:
+    needs: [setup, stage3]
+    if: needs.stage3.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 4
+      version: ${{ needs.setup.outputs.version }}
+
+  stage5:
+    needs: [setup, stage4]
+    if: needs.stage4.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 5
+      version: ${{ needs.setup.outputs.version }}
+
+  stage6:
+    needs: [setup, stage5]
+    if: needs.stage5.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 6
+      last: true
+      version: ${{ needs.setup.outputs.version }}
+
+  release:
+    name: Release
+    needs: [setup, stage1, stage2, stage3, stage4, stage5, stage6]
+    if: >-
+      !cancelled() && needs.setup.outputs.publish == 'true' &&
+      (needs.stage1.outputs.result == 'done' || needs.stage2.outputs.result == 'done' ||
+       needs.stage3.outputs.result == 'done' || needs.stage4.outputs.result == 'done' ||
+       needs.stage5.outputs.result == 'done' || needs.stage6.outputs.result == 'done')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.setup.outputs.version }}
+      PRERELEASE: ${{ needs.setup.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: batocera-rf35h-${{ needs.setup.outputs.version }}
+          path: dist
+
+      - name: Controlli
+        run: |
+          set -eu
+          cd dist
+          sha256sum -c SHA256SUMS
+          [ "$(cat boot.tar.xz.md5)" = "$(md5sum boot.tar.xz | cut -d' ' -f1)" ]
+          grep -q "\.rf35h-${VERSION} " batocera.version
+          tail -1 verify-image.txt | grep -qx Conforme
+          ls -la
+
+      - name: Note della release
+        run: ./tools/ci-release-notes.sh dist "${VERSION}" > "${RUNNER_TEMP}/notes.md"
+
+      # bozza, file, poi pubblicata: una console che guarda proprio in quel
+      # momento non trova mai una release senza boot.tar.xz
+      - name: Pubblica
+        run: |
+          set -eu
+          cd dist
+          flags=()
+          if [ "${PRERELEASE}" = true ]; then flags+=(--prerelease); fi
+          gh release create "${VERSION}" --repo "${GITHUB_REPOSITORY}" --draft \
+            --target "${GITHUB_SHA}" --title "Batocera RF35H ${VERSION}" \
+            --notes-file "${RUNNER_TEMP}/notes.md" "${flags[@]}"
+          gh release upload "${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+            ./*.img.gz boot.tar.xz boot.tar.xz.md5 batocera.version SHA256SUMS verify-image.txt
+          gh release edit "${VERSION}" --repo "${GITHUB_REPOSITORY}" --draft=false
+          echo "### Pubblicata: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${VERSION}" >> "${GITHUB_STEP_SUMMARY}"
