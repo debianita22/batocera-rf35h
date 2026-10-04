@@ -17,6 +17,14 @@ on:
       version:
         type: string
         required: true
+      resume_run:
+        description: "solo parte 1: riprende dallo stato salvato da un run fallito"
+        type: string
+        default: ""
+      rebuild:
+        description: "solo parte 1 di una ripresa: pacchetti da rifare da capo"
+        type: string
+        default: ""
     outputs:
       result:
         description: "done: immagini fatte; continue: serve un'altra parte"
@@ -24,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  actions: read     # artifact di un altro run (resume_run)
 
 jobs:
   build:
@@ -36,6 +45,7 @@ jobs:
       RF35H_VERSION: ${{ inputs.version }}
       RF35H_STAGE: ${{ inputs.stage }}
       RF35H_CONTAINER: rf35h-build
+      RF35H_REBUILD: ${{ inputs.rebuild }}
       # 6 GB: stare nella cache delle actions (10 GB per repository)
       CCACHE_MAXSIZE: 6G
       # minuti dall'inizio del job in cui la build deve fermarsi: il resto
@@ -68,12 +78,49 @@ jobs:
         if: inputs.stage > 1
         run: ./tools/ci-build.sh unpack "${PREV}"
 
+      # Ripresa di un run fallito (solo build di prova: lo controlla build.yml).
+      # Lo stato piu' avanzato che quel run ha salvato; "prepare" applica le
+      # patch di questo commit, la build rifa' il pacchetto interrotto e quelli
+      # di "rebuild".
+      - name: Run da riprendere
+        id: resume
+        if: inputs.stage == 1 && inputs.resume_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ inputs.resume_run }}
+        run: |
+          name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN}/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.expired | not) | .name | select(test("^state-[0-9]+[.]tar[.]zst$"))]
+                  | sort_by(ltrimstr("state-") | rtrimstr(".tar.zst") | tonumber) | last // empty')"
+          if [ -z "${name}" ]; then
+            echo "::error::il run ${RUN} non ha uno stato da riprendere: scaduto, o fallito prima della build"
+            exit 1
+          fi
+          n="${name#state-}"
+          { echo "name=${name}"; echo "n=${n%.tar.zst}"; } >> "${GITHUB_OUTPUT}"
+          echo "- ripresa dal run ${RUN} (${name}): pacchetti di due commit, solo per prova" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Stato del run da riprendere
+        if: steps.resume.outcome == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.resume.outputs.name }}
+          run-id: ${{ inputs.resume_run }}
+          github-token: ${{ github.token }}
+          path: ${{ env.W }}/dl-state
+
+      - name: Estrai lo stato del run da riprendere
+        if: steps.resume.outcome == 'success'
+        env:
+          N: ${{ steps.resume.outputs.n }}
+        run: ./tools/ci-build.sh unpack "${N}"
+
       - name: Batocera con le patch, container
         run: ./tools/ci-build.sh prepare
 
       # ccache della build precedente (la parte 1; le altre la ricevono nello stato)
       - name: ccache
-        if: inputs.stage == 1
+        if: inputs.stage == 1 && inputs.resume_run == ''
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.W }}/work/ccache
@@ -100,6 +147,19 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # --- fallita: lo stato, per riprenderla (Run workflow, resume_run) --------
+      - name: Stato della build fallita
+        if: failure() && steps.build.outcome == 'failure'
+        run: ./tools/ci-build.sh pack "${{ inputs.stage }}" failed
+
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.build.outcome == 'failure'
+        with:
+          path: ${{ env.W }}/state-${{ inputs.stage }}.tar.zst
+          archive: false
+          retention-days: 3
+          compression-level: 0
+
       # --- non finita: lo stato per la parte successiva -------------------------
       - name: Non finita nell'ultima parte
         if: steps.build.outputs.result == 'continue' && inputs.last
@@ -119,7 +179,8 @@ jobs:
           retention-days: 2
           compression-level: 0
 
-      # --- finita: immagine verificata, file della release ----------------------
+      # --- finita: i file della release, caricati anche se un controllo ---------
+      # --- fallisce; il job fallisce dopo (verdict) ------------------------------
       - name: Immagini
         if: steps.build.outputs.result == 'done'
         run: ./tools/ci-build.sh collect
@@ -139,6 +200,10 @@ jobs:
           path: ${{ env.W }}/upstream/
           retention-days: 14
           compression-level: 0
+
+      - name: Esito delle immagini
+        if: steps.build.outputs.result == 'done'
+        run: ./tools/ci-build.sh verdict
 
       # La ccache alla fine di ogni parte, anche fallita: una build nuova
       # riparte dall'ultima, non da zero. Le chiavi sono uniche; oltre i 10 GB

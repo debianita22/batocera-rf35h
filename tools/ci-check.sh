@@ -15,10 +15,12 @@
 #      pacchetti che devono esserci (rk915, rocknix-joypad, U-Boot mainline...)
 #      e quelli che il profilo snello toglie (Kodi, MAME attuale, Moonlight)
 #   5. kernel: tools/check-dtb.sh (DTB con W=1, joypad e rk915 compilati)
-#   6. test: test-upgrade.sh (batocera-upgrade verso le release) e
-#      test-verify-image.sh (il controllo dell'immagine, giusta e rotta)
+#   6. test: test-upgrade.sh (batocera-upgrade verso le release),
+#      test-verify-image.sh (il controllo dell'immagine, giusta e rotta) e
+#      test-ci-build.sh (stato tra le parti, ripresa, raccolta delle immagini)
 #
-#   --quick salta 5 e test-verify-image (niente kernel da scaricare).
+#   --quick salta 5, test-verify-image e la parte di test-ci-build che usa il
+#   DTB (niente kernel da scaricare).
 #
 # Serve: git, make, gcc, patch, python3, shellcheck, squashfs-tools, mtools,
 # device-tree-compiler, u-boot-tools, fdisk; per 5 anche gcc-aarch64-linux-gnu.
@@ -114,6 +116,9 @@ say "6. Test"
 "$O/tools/test-upgrade.sh" "$TREE"
 if [ "$QUICK" = no ]; then
 	"$O/tools/test-verify-image.sh" "$TREE" "$WORK/kernel/rk3326-xifan-rf35h.dtb"
+	"$O/tools/test-ci-build.sh" "$TREE" "$WORK/kernel/rk3326-xifan-rf35h.dtb"
+else
+	"$O/tools/test-ci-build.sh" "$TREE"
 fi
 
 say "Controlli superati"

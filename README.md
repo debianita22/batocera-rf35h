@@ -90,7 +90,9 @@ tests of the update script and of the image checker.
   A `v*` tag (or *Run workflow* with a version) publishes a release; a tag
   with a dash is a pre-release, which consoles do not update to. *Run
   workflow* without a version, or a push to `ci-test/**`, makes a test build
-  whose images stay in the run's artifacts.
+  whose images stay in the run's artifacts. A failed part saves its state
+  for three days: *Run workflow* with `resume_run` (that run's ID), and
+  `rebuild` listing the packages whose patches changed, resumes from it.
 
 ## Layout
 
@@ -102,7 +104,7 @@ tests of the update script and of the image checker.
 | `tools/apply.sh`, `tools/build.sh` | prepare the tree, build |
 | `tools/verify-image.sh` | what a finished RF35H image must contain |
 | `tools/check-dtb.sh` | device tree and modules against Batocera's kernel |
-| `tools/test-*.sh` | tests of the update script and of the image checker |
+| `tools/test-*.sh` | tests of the update script, of the image checker and of the CI steps |
 | `tools/ci-*.sh`, `tools/prune-build.sh` | the CI steps |
 | `docs/diario.md` | decisions and verification log (Italian) |
 

@@ -2,6 +2,9 @@
 # test-verify-image.sh - verify-image.sh su un'immagine finta, giusta e rotta.
 #
 #   tools/test-verify-image.sh BATOCERA_TREE DTB
+#   tools/test-verify-image.sh --make-image BATOCERA_TREE DTB OUT [MUTAZIONE]
+#       solo l'immagine finta (con la mutazione, se c'e'), in OUT: la usa
+#       tools/test-ci-build.sh
 #
 # BATOCERA_TREE: l'albero dopo tools/apply.sh (ne prende extlinux.conf,
 # boot.cmd, es_input.cfg e batocera-upgrade veri); DTB: rk3326-xifan-rf35h.dtb
@@ -14,6 +17,8 @@
 # che passa anche col difetto non serve a niente.
 set -euo pipefail
 
+MAKE_ONLY=""
+if [ "${1:-}" = --make-image ]; then MAKE_ONLY=yes; shift; fi
 TREE="${1:?uso: test-verify-image.sh BATOCERA_TREE DTB}"
 DTB_IN="${2:?uso: test-verify-image.sh BATOCERA_TREE DTB}"
 O="$(cd "$(dirname "$0")/.." && pwd)"
@@ -115,6 +120,14 @@ make_image() {
 }
 
 run_verify() { "$O/tools/verify-image.sh" "$1/out" > "$1/verify.log" 2>&1; }
+
+if [ -n "$MAKE_ONLY" ]; then
+	DEST="${3:?uso: test-verify-image.sh --make-image BATOCERA_TREE DTB OUT [MUTAZIONE]}"
+	make_image "$W/img" "${4:-}"
+	mkdir -p "$DEST"
+	cp "$W/img/out"/* "$DEST/"
+	exit 0
+fi
 
 pass=0; fail=0
 echo "==> immagine giusta"

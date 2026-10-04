@@ -6,10 +6,15 @@
 #   ci-build.sh prepare         albero di Batocera con le patch (apply.sh),
 #                               container di build, elenco dei pacchetti
 #   ci-build.sh build           la build, fino alla scadenza del job
-#   ci-build.sh pack N          lo stato per la parte N+1 (W/state-N.tar.zst)
+#   ci-build.sh pack N [failed] lo stato per la parte N+1 (W/state-N.tar.zst);
+#                               "failed": quello di una build fallita, da cui
+#                               un'altra build di prova puo' riprendere
 #   ci-build.sh unpack N        lo stato della parte N
-#   ci-build.sh collect         l'immagine rf35h verificata e i file della
-#                               release in W/dist; l'immagine mainline in W/upstream
+#   ci-build.sh collect         i file della release in W/dist (con l'esito
+#                               di verify-image.sh), l'immagine mainline in
+#                               W/upstream; non fallisce: gli artifact si
+#                               caricano comunque
+#   ci-build.sh verdict         fallisce se collect ha trovato problemi
 #   ci-build.sh logs N          i log della parte N (W/log-N.tar.zst)
 #   ci-build.sh ccache-stats
 #
@@ -24,9 +29,15 @@
 # tools/prune-build.sh toglie i file di compilazione dei pacchetti finiti:
 # restano gli stamp, e lo stato passa da decine di GB a pochi.
 #
+# Ripresa: una build di prova puo' partire dallo stato salvato da un run
+# fallito (Run workflow, resume_run). RF35H_REBUILD (nomi di pacchetti
+# separati da spazi) li fa rifare da capo: buildroot non ricostruisce da solo
+# un pacchetto gia' fatto quando ne cambiano il .mk o le patch.
+#
 # Variabili (le mette il workflow): GITHUB_WORKSPACE, GITHUB_ENV,
 # GITHUB_OUTPUT, GITHUB_STEP_SUMMARY, GITHUB_REPOSITORY, JOB_START,
-# BUILD_MINUTES, W, RF35H_VERSION, RF35H_CONTAINER, RF35H_STAGE.
+# BUILD_MINUTES, W, RF35H_VERSION, RF35H_CONTAINER, RF35H_STAGE,
+# RF35H_REBUILD.
 set -euo pipefail
 
 O="$(cd "$(dirname "$0")/.." && pwd)"
@@ -133,13 +144,32 @@ cmd_prepare() {
 	"${TREE}/configs/createDefconfig.sh" "${TREE}/configs/batocera-rf35h.board" "${W}/empty_user_defconfig" "${TREE}/configs/batocera-rf35h_defconfig"
 	make -s -C "${TREE}/buildroot" O="${cfg}" BR2_EXTERNAL="${TREE}" batocera-rf35h_defconfig >/dev/null 2>&1 \
 		|| die "make batocera-rf35h_defconfig"
+	# nome e versione: la cartella di un pacchetto e' build/<nome>-<versione>
 	make -s -C "${cfg}" show-info 2>/dev/null \
-		| python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(sorted(k for k,v in d.items() if v.get("type") in ("target","host"))))' \
+		| python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(sorted("%s %s" % (k, v.get("version") or "") for k,v in d.items() if v.get("type") in ("target","host"))))' \
 		> "${W}/packages.txt"
 	echo "  $(wc -l < "${W}/packages.txt") pacchetti"
+	rebuild
 	# shellcheck disable=SC1091
 	. "${TREE}/.rf35h-overlay"
 	note notice "Albero" "Batocera ${BATOCERA_COMMIT:0:7} + overlay ${OVERLAY} = ${TREE_HEAD:0:7}; $(wc -l < "${W}/packages.txt") pacchetti; container ${digest}"
+}
+
+# RF35H_REBUILD: le cartelle di quei pacchetti si tolgono, e buildroot li rifa'
+rebuild() {
+	local p ver dir
+	for p in ${RF35H_REBUILD:-}; do
+		ver="$(awk -v p="${p}" '$1 == p {print $2; exit}' "${W}/packages.txt")"
+		grep -q "^${p} " "${W}/packages.txt" || die "RF35H_REBUILD: ${p} non e' un pacchetto di questa build"
+		dir="${OUT}/build/${p}${ver:+-${ver}}"
+		if [ -d "${dir}" ]; then
+			rm -rf "${dir}"
+			echo "  ${p}: da rifare"
+		else
+			echo "  ${p}: non ancora costruito"
+		fi
+	done
+	[ -z "${RF35H_REBUILD:-}" ] || note notice "Da rifare" "${RF35H_REBUILD}"
 }
 
 # il log completo della build di questa parte
@@ -243,8 +273,8 @@ cmd_build() {
 
 cmd_pack() {
 	paths
-	local n="${1:?numero della parte}"
-	say "Stato della parte ${n}"
+	local n="${1:?numero della parte}" kind="${2:-}"
+	say "Stato della parte ${n}${kind:+ (build fallita)}"
 	"$O/tools/prune-build.sh" "${OUT}"
 	local t0; t0="$(date +%s)"
 	tar -C "${WORKD}" -cf - output ccache container.txt | zstd -q -T0 -3 > "${W}/state-${n}.tar.zst"
@@ -283,22 +313,46 @@ cmd_collect() {
 	paths
 	local img="${OUT}/images/batocera/images"
 	say "Verifica dell'immagine rf35h"
-	"$O/tools/verify-image.sh" "${img}/rf35h" | tee "${W}/verify.log"
+	# Niente "die" qui: dopo ore di build le immagini si caricano comunque
+	# come artifact, anche se un controllo fallisce. L'esito va in
+	# W/verdict.txt, e "verdict" fa fallire il job dopo il caricamento.
+	local problems=()
+	"$O/tools/verify-image.sh" "${img}/rf35h" 2>&1 | tee "${W}/verify.log" || true
+	tail -1 "${W}/verify.log" | grep -qx Conforme || problems+=("verify-image: $(tail -1 "${W}/verify.log")")
 	say "File della release"
 	rm -rf "${W}/dist" "${W}/upstream"; mkdir -p "${W}/dist" "${W}/upstream"
-	cp "${img}"/rf35h/batocera-rk3326-rf35h-*.img.gz "${W}/dist/"
-	cp "${img}/rf35h/boot.tar.xz" "${img}/rf35h/boot.tar.xz.md5" "${img}/rf35h/batocera.version" "${W}/dist/"
+	cp "${img}"/rf35h/batocera-rk3326-rf35h-*.img.gz "${W}/dist/" || problems+=("immagine rf35h assente")
+	cp "${img}/rf35h/boot.tar.xz" "${img}/rf35h/boot.tar.xz.md5" "${img}/rf35h/batocera.version" "${W}/dist/" \
+		|| problems+=("file dell'aggiornamento assenti")
 	cp "${W}/verify.log" "${W}/dist/verify-image.txt"
-	(cd "${W}/dist" && sha256sum -- *.img.gz boot.tar.xz batocera.version > SHA256SUMS)
+	(cd "${W}/dist" && sha256sum -- *.img.gz boot.tar.xz batocera.version > SHA256SUMS) || true
 	# GitHub non accetta in una release file da 2 GiB in su
-	local f big=""
+	local f
 	for f in "${W}"/dist/*; do
-		if [ "$(stat -c%s "$f")" -ge $((2 * 1024 * 1024 * 1024)) ]; then big="${big} $(basename "$f")"; fi
+		if [ "$(stat -c%s "$f")" -ge $((2 * 1024 * 1024 * 1024)) ]; then
+			problems+=("$(basename "$f"): $(du -h "$f" | cut -f1), oltre i 2 GiB di una release GitHub")
+		fi
 	done
 	ls -la "${W}/dist"
-	[ -z "${big}" ] || { note error "File troppo grandi per una release" "${big# } (limite GitHub: 2 GiB)"; die "da 2 GiB in su:${big}"; }
-	cp "${img}"/mainline/batocera-rk3326-mainline-*.img.gz "${img}/mainline/batocera.version" "${W}/upstream/"
-	note notice "Immagini" "rf35h: $(du -h "${W}"/dist/*.img.gz | cut -f1), boot.tar.xz $(du -h "${W}/dist/boot.tar.xz" | cut -f1), $(cat "${W}/dist/batocera.version"); verify-image: $(tail -1 "${W}/verify.log")"
+	cp "${img}"/mainline/batocera-rk3326-mainline-*.img.gz "${img}/mainline/batocera.version" "${W}/upstream/" \
+		|| problems+=("immagine mainline assente")
+	note notice "Immagini" "rf35h: $(du -ch "${W}"/dist/*.img.gz 2>/dev/null | tail -1 | cut -f1), boot.tar.xz $(du -h "${W}/dist/boot.tar.xz" 2>/dev/null | cut -f1), batocera.version $(cat "${W}/dist/batocera.version" 2>/dev/null); squashfs $(du -h "${img}/../boot_rf35h/boot/batocera" 2>/dev/null | cut -f1) + rufomaculata $(du -h "${img}/../boot_rf35h/boot/rufomaculata" 2>/dev/null | cut -f1); verify-image: $(tail -1 "${W}/verify.log")"
+	# vuoto = tutto a posto (printf con un array vuoto scriverebbe una riga vuota)
+	: > "${W}/verdict.txt"
+	if [ "${#problems[@]}" -gt 0 ]; then
+		printf '%s\n' "${problems[@]}" > "${W}/verdict.txt"
+		note error "Immagini caricate, ma con problemi" "$(cat "${W}/verdict.txt")"
+	fi
+}
+
+cmd_verdict() {
+	: "${W:?}"
+	[ -f "${W}/verdict.txt" ] || die "manca W/verdict.txt: collect non e' arrivato in fondo"
+	if [ -s "${W}/verdict.txt" ]; then
+		cat "${W}/verdict.txt"
+		die "le immagini hanno problemi (vedi sopra)"
+	fi
+	echo "Immagini a posto"
 }
 
 cmd_logs() {
@@ -331,6 +385,7 @@ case "${1:-}" in
 	pack)         shift; cmd_pack "$@" ;;
 	unpack)       shift; cmd_unpack "$@" ;;
 	collect)      cmd_collect ;;
+	verdict)      cmd_verdict ;;
 	logs)         shift; cmd_logs "$@" ;;
 	ccache-stats) cmd_ccache_stats ;;
 	*) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 2 ;;

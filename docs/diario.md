@@ -194,7 +194,14 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   aver tolto `\r` e i codici di colore (`docker run -t`: buildroot colora le
   righe `>>>`);
 - l'immagine rf35h passa da `verify-image.sh` prima della release; ogni file
-  deve stare sotto i 2 GiB.
+  deve stare sotto i 2 GiB. Se un controllo fallisce, i file si caricano lo
+  stesso come artifact (dopo decine di ore di build servono comunque, per
+  provarli o capire cosa non va), e il job fallisce dopo (`verdict`);
+- **ripresa**: una parte fallita salva il suo stato (3 giorni). *Run workflow*
+  con `resume_run` = l'ID di quel run riparte da li' con le patch del commit
+  nuovo (solo build di prova, mai una release); `rebuild` elenca i pacchetti
+  da rifare da capo, quelli il cui `.mk` o le cui patch sono cambiati
+  (buildroot non se ne accorge da solo).
 
 ## Verificato (host x86_64, 4/10/2026)
 
@@ -213,6 +220,12 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   partizioni, console, FDT, boot.scr, board, DTB, moduli, firmware, alias di
   rk915, es_input, URL, versione, core, profilo snello nei due squashfs,
   md5, loader SPI) tutte rilevate.
+- `test-ci-build.sh` 18/18: stato tra una parte e l'altra (pacchetti finiti
+  potati con gli stamp, `linux` intero, i pacchetti interrotti tolti, ccache
+  e digest del container portati), `rebuild`, `collect`/`verdict` con
+  un'immagine giusta e una rotta. Ha trovato un errore vero: con nessun
+  problema `printf` su un array vuoto scriveva una riga vuota, e `verdict`
+  avrebbe bocciato un'immagine buona.
 - Il comando docker che `make rf35h-build` esegue (dry run del Makefile di
   Batocera): due `docker run`, defconfig poi build, con `--name rf35h-build`
   e le cartelle fuori dall'albero.

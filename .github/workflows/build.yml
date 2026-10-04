@@ -7,6 +7,11 @@
 #                            release, le immagini restano negli artifact;
 #                            con "version": build e release, tag creato qui
 #   push su ci-test/**       build di prova, mai una release
+#   Run workflow, resume_run l'ID di un run fallito: build di prova che
+#                            riparte dal suo stato (salvato per 3 giorni);
+#                            "rebuild" elenca i pacchetti da rifare da capo
+#                            (quelli il cui .mk o le cui patch sono cambiati).
+#                            Pacchetti di due commit insieme: mai per una release.
 #
 # La build sta in fino a otto parti di 6 ore (build-stage.yml), una dopo
 # l'altra: ognuna riprende lo stato della precedente. Quando una finisce le
@@ -33,6 +38,14 @@ on:
         description: "Pre-release: gli aggiornamenti delle console non la vedono"
         type: boolean
         default: false
+      resume_run:
+        description: "Solo build di prova: ID di un run fallito da cui riprendere"
+        type: string
+        default: ""
+      rebuild:
+        description: "Con resume_run: pacchetti da rifare da capo (nomi separati da spazi)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -51,6 +64,8 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       publish: ${{ steps.v.outputs.publish }}
       prerelease: ${{ steps.v.outputs.prerelease }}
+      resume: ${{ steps.v.outputs.resume }}
+      rebuild: ${{ steps.v.outputs.rebuild }}
     steps:
       - uses: actions/checkout@v7
 
@@ -60,8 +75,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IN_VERSION: ${{ inputs.version }}
           IN_PRERELEASE: ${{ inputs.prerelease }}
+          IN_RESUME: ${{ inputs.resume_run }}
+          IN_REBUILD: ${{ inputs.rebuild }}
         run: |
           set -eu
+          # una release si costruisce sempre da zero: la ripresa riusa pacchetti
+          # fatti da un altro commit
+          case "${IN_RESUME:-}" in
+            '') [ -z "${IN_REBUILD:-}" ] || { echo "::error::rebuild solo con resume_run"; exit 1; } ;;
+            *[!0-9]*) echo "::error::resume_run: un ID di run (numero)"; exit 1 ;;
+            *) if [ -n "${IN_VERSION:-}" ]; then echo "::error::resume_run solo per le build di prova, senza version"; exit 1; fi ;;
+          esac
+          case "${IN_REBUILD:-}" in
+            *[!a-z0-9._+\ -]*) echo "::error::rebuild: nomi di pacchetti separati da spazi"; exit 1 ;;
+          esac
           short="$(git rev-parse --short=7 HEAD)"
           prerelease=false
           if [ "${GITHUB_EVENT_NAME}" = push ] && [ "${GITHUB_REF_TYPE}" = tag ]; then
@@ -93,6 +120,8 @@ jobs:
             echo "version=${version}"
             echo "publish=${publish}"
             echo "prerelease=${prerelease}"
+            echo "resume=${IN_RESUME:-}"
+            echo "rebuild=${IN_REBUILD:-}"
           } >> "${GITHUB_OUTPUT}"
           {
             echo "### ${version}"
@@ -120,6 +149,8 @@ jobs:
     with:
       stage: 1
       version: ${{ needs.setup.outputs.version }}
+      resume_run: ${{ needs.setup.outputs.resume }}
+      rebuild: ${{ needs.setup.outputs.rebuild }}
 
   stage2:
     needs: [setup, stage1]
