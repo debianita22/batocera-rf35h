@@ -13,7 +13,7 @@ two patch series on top of it:
 
 | Series | What | Where it should end up |
 |---|---|---|
-| `upstream/` | RF35H support: device tree, rumble motor on a GPIO for `rocknix-joypad`, the gamepad mapping, the RF35H in Batocera's `mainline` RK3326 image | a pull request to [batocera.linux](https://github.com/batocera-linux/batocera.linux) |
+| `upstream/` | RF35H support: device tree, rumble motor on a GPIO for `rocknix-joypad`, the gamepad mapping, the RF35H in Batocera's `mainline` RK3326 image, `rk915` loaded from its device tree node | a pull request to [batocera.linux](https://github.com/batocera-linux/batocera.linux) |
 | `fork/` | what stays here: the `rf35h` target and image (the loader the RF35H is known to boot with), updates from this repository's releases, a leaner package set | here |
 
 ## The device
@@ -85,7 +85,7 @@ tests of the update script and of the image checker.
 ## CI and releases
 
 - `check.yml`: `tools/ci-check.sh` on every push and pull request.
-- `build.yml`: the build, in up to six consecutive 6-hour jobs on GitHub's
+- `build.yml`: the build, in up to eight consecutive 6-hour jobs on GitHub's
   free runners (each job hands its state to the next), then the release.
   A `v*` tag (or *Run workflow* with a version) publishes a release; a tag
   with a dash is a pre-release, which consoles do not update to. *Run

@@ -8,8 +8,9 @@
 #                            con "version": build e release, tag creato qui
 #   push su ci-test/**       build di prova, mai una release
 #
-# La build sta in fino a sei parti di 6 ore (build-stage.yml), una dopo
-# l'altra: ognuna riprende lo stato della precedente.
+# La build sta in fino a otto parti di 6 ore (build-stage.yml), una dopo
+# l'altra: ognuna riprende lo stato della precedente. Quando una finisce le
+# immagini, quelle dopo sono saltate.
 #
 # La release ha l'immagine (.img.gz, prima installazione) e l'aggiornamento
 # che le console scaricano da EmulationStation (boot.tar.xz con la sua .md5 e
@@ -158,17 +159,34 @@ jobs:
     uses: ./.github/workflows/build-stage.yml
     with:
       stage: 6
+      version: ${{ needs.setup.outputs.version }}
+
+  stage7:
+    needs: [setup, stage6]
+    if: needs.stage6.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 7
+      version: ${{ needs.setup.outputs.version }}
+
+  stage8:
+    needs: [setup, stage7]
+    if: needs.stage7.outputs.result == 'continue'
+    uses: ./.github/workflows/build-stage.yml
+    with:
+      stage: 8
       last: true
       version: ${{ needs.setup.outputs.version }}
 
   release:
     name: Release
-    needs: [setup, stage1, stage2, stage3, stage4, stage5, stage6]
+    needs: [setup, stage1, stage2, stage3, stage4, stage5, stage6, stage7, stage8]
     if: >-
       !cancelled() && needs.setup.outputs.publish == 'true' &&
       (needs.stage1.outputs.result == 'done' || needs.stage2.outputs.result == 'done' ||
        needs.stage3.outputs.result == 'done' || needs.stage4.outputs.result == 'done' ||
-       needs.stage5.outputs.result == 'done' || needs.stage6.outputs.result == 'done')
+       needs.stage5.outputs.result == 'done' || needs.stage6.outputs.result == 'done' ||
+       needs.stage7.outputs.result == 'done' || needs.stage8.outputs.result == 'done')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

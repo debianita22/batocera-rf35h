@@ -14,7 +14,8 @@
 #                     RF35H_UPDATE_REPO (predefinito debianita22/batocera-rf35h)
 #
 # Ogni volta l'albero torna al commit fissato e le patch si riapplicano da capo:
-# il risultato dipende solo da questo repo. Il build resta fuori dall'albero
+# il risultato dipende solo da questo repo, date dei file comprese (tutte al
+# 1/1/2026, vedi sotto). Il build resta fuori dall'albero
 # (tools/build.sh), quindi riportarlo indietro non tocca niente di costruito.
 # Le patch applicate con identita' e date fisse danno sempre gli stessi commit:
 # lo stesso overlay, lo stesso HEAD.
@@ -107,6 +108,18 @@ UPG="$TREE/package/batocera/core/batocera-scripts/scripts/batocera-upgrade"
 sed -i "s|@RF35H_UPDATE_URL@|${UPDATE_URL}|" "$UPG"
 echo "    loader $LOADER_SHA256"
 echo "    aggiornamenti da $UPDATE_URL"
+
+# Una data fissa (1/1/2026) su tutti i file dell'albero. Git scrive i file
+# con l'ora del checkout, e buildroot riconfigura un pacchetto kconfig (linux,
+# batocera-initramfs) quando il file della sua configurazione e' piu' recente
+# della .config costruita: senza questo, un albero appena preparato su un
+# lavoro gia' fatto (la parte successiva della CI, o apply.sh rifatto a mano)
+# rifarebbe kernel e initramfs a ogni volta. Con la data fissa no; e lo stesso
+# overlay da' anche le stesse date.
+EPOCH=1767225600
+(cd "$TREE" && git ls-files -z | xargs -0 touch -h -d "@$EPOCH" --)
+(cd "$TREE/buildroot" && git ls-files -z | xargs -0 touch -h -d "@$EPOCH" --)
+touch -d "@$EPOCH" "$LDIR/known-good.bin"
 
 # Cosa c'e' nell'albero: lo legge tools/build.sh per il nome della versione e
 # per accorgersi di un albero preparato da un altro overlay.

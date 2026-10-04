@@ -1,7 +1,7 @@
-From 6cce98b802863e19b423bdf96148e47a5a277b72 Mon Sep 17 00:00:00 2001
+From 5f3ba9cb7a72d8952a4d8c4f2e8f1cf992f7f5e5 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:57:17 +0200
-Subject: [PATCH 2/4] rocknix-joypad: support a rumble motor on a GPIO
+Subject: [PATCH 2/5] rocknix-joypad: support a rumble motor on a GPIO
 
 The XiFan RF35H drives its vibration motor from a plain GPIO, not from a
 PWM. The patch lets the singleadc driver take "rumble-gpios" when there

@@ -1,7 +1,7 @@
-From 19702d4eba6882859d9fb766d43b35449175cc4c Mon Sep 17 00:00:00 2001
+From f2b09e7db79fdc9d8155fd8cd408c1efef4534af Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:57:42 +0200
-Subject: [PATCH 3/4] es_input: XiFan RF35H gamepad, with Select as hotkey
+Subject: [PATCH 3/5] es_input: XiFan RF35H gamepad, with Select as hotkey
 
 The RF35H has no function key: besides the D-pad, ABXY, the shoulders,
 Select, Start and the stick clicks there are only power and reset. Its

@@ -15,10 +15,13 @@
 #             kernel, initrd, DTB, batocera.board = rf35h
 #   DTB       modello, joypad con l'identita' e il motore su GPIO, nodo RK915,
 #             modo a 60 Hz predefinito
-#   sistema   (squashfs) i moduli rk915 e rocknix-singleadc-joypad, con la
-#             patch del motore; i firmware RK915; il pad in es_input.cfg;
-#             batocera-upgrade verso le release; niente Kodi, MAME attuale,
-#             Moonlight (profilo snello)
+#   sistema   i due squashfs (boot/batocera e boot/rufomaculata: Batocera
+#             mette nel secondo usr/lib/libretro e usr/bin/mame, e l'initrd li
+#             monta insieme): i moduli rk915 e rocknix-singleadc-joypad, con
+#             la patch del motore; i firmware RK915; l'alias che carica rk915;
+#             il pad in es_input.cfg; batocera-upgrade verso le release; i core
+#             libretro principali; niente Kodi, MAME attuale, Moonlight
+#             (profilo snello)
 #   update    boot.tar.xz con lo stesso sistema, la sua .md5, batocera.version
 #
 # Esce 0 con "Conforme", 1 con "NON conforme" e l'elenco di cosa manca.
@@ -92,14 +95,19 @@ chk "pannello: 31,08 MHz predefinito (60 Hz)" bash -c 'fdtget "$1" /dsi@ff450000
 
 echo "-- sistema"
 mcopy -n -i "$FAT" ::boot/batocera "$TMP/system.squashfs" 2>/dev/null
+mcopy -n -i "$FAT" ::boot/rufomaculata "$TMP/rufo.squashfs" 2>/dev/null
 SQ="$TMP/system.squashfs"
+RUFO="$TMP/rufo.squashfs"
+# l'elenco dei file del sistema intero: i due squashfs insieme
 LIST="$TMP/list"
-unsquashfs -l -d '' "$SQ" > "$LIST" 2>/dev/null || true
+{ unsquashfs -l -d '' "$SQ"; unsquashfs -l -d '' "$RUFO"; } > "$LIST" 2>/dev/null || true
 has() { grep -qE "$1" "$LIST"; }
-cat_sq() { unsquashfs -cat "$SQ" "$1" 2>/dev/null; }
+cat_sq() { unsquashfs -cat "$SQ" "$1" 2>/dev/null || unsquashfs -cat "$RUFO" "$1" 2>/dev/null; }
 chk "modulo rocknix-singleadc-joypad" has '/lib/modules/[^/]+/.*/rocknix-singleadc-joypad\.ko(\.[a-z]+)?$'
 chk "modulo rk915" has '/lib/modules/[^/]+/.*/rk915\.ko(\.[a-z]+)?$'
 chk "firmware RK915 (rk915_fw.bin, rk915_patch.bin)" bash -c 'grep -qE "/lib/firmware/rk915_fw\.bin$" "$1" && grep -qE "/lib/firmware/rk915_patch\.bin$" "$1"' _ "$LIST"
+chk "modprobe.d: rk915 caricato dal nodo rockchip,rk915" \
+	bash -c '[ "$(unsquashfs -cat "$1" /etc/modprobe.d/rk915.conf 2>/dev/null | grep -v "^#")" = "alias of:N*T*Crockchip,rk915* rk915" ]' _ "$SQ"
 JOY="$(grep -E '/lib/modules/[^/]+/.*/rocknix-singleadc-joypad\.ko' "$LIST" | head -1)"
 if [ -n "$JOY" ]; then
 	cat_sq "$JOY" > "$TMP/joy.ko"
@@ -115,16 +123,19 @@ chk "batocera-upgrade: aggiornamenti dalle release GitHub" grep -qE '^G_UPDATEUR
 chk "batocera-upgrade: controllo della board anche dalla rete" grep -q 'the URL no longer names the board' <<<"$UPG"
 VER="$(cat_sq /usr/share/batocera/batocera.version)"
 chk "batocera.version col nome rf35h ($VER)" grep -q '\.rf35h-' <<<"$VER"
+NCORES="$(grep -cE '/usr/lib/libretro/[^/]+_libretro\.so$' "$LIST")"
+chk "core libretro: $NCORES, con gambatte, snes9x, mgba, fbneo, mame078plus, pcsx_rearmed, flycastvl" \
+	bash -c 'for c in gambatte snes9x mgba fbneo mame078plus pcsx_rearmed flycastvl; do grep -qE "/usr/lib/libretro/${c}_libretro\.so$" "$1" || exit 1; done' _ "$LIST"
 chk "profilo snello: niente Kodi, MAME attuale, Moonlight" \
-	bash -c '! grep -qE "/usr/(bin|lib)/(kodi|mame|moonlight-qt)(/|$)" "$1" && ! grep -qE "/mame_libretro\.so$" "$1"' _ "$LIST"
+	bash -c '! grep -qE "/usr/(bin|lib)/(kodi|mame|moonlight-qt)(/|$)" "$1" && ! grep -qE "/usr/lib/libretro/mame_libretro\.so$" "$1"' _ "$LIST"
 
 echo "-- aggiornamento"
 BT="$DIR/boot.tar.xz"
 if [ -f "$BT" ]; then
 	chk "boot.tar.xz.md5" bash -c '[ "$(cat "$1.md5")" = "$(md5sum "$1" | cut -d" " -f1)" ]' _ "$BT"
 	chk "boot.tar.xz: board rf35h" bash -c '[ "$(tar -xJf "$1" boot/batocera.board -O | tr -d "\n ")" = rf35h ]' _ "$BT"
-	chk "boot.tar.xz: boot/batocera.update, DTB, boot.scr, extlinux.conf" \
-		bash -c 'l="$(tar -tJf "$1")"; for f in boot/batocera.update rk3326-xifan-rf35h.dtb boot.scr extlinux/extlinux.conf linux initrd.lz4; do grep -qx "$f" <<<"$l" || exit 1; done' _ "$BT"
+	chk "boot.tar.xz: i due squashfs (.update), DTB, boot.scr, extlinux.conf" \
+		bash -c 'l="$(tar -tJf "$1")"; for f in boot/batocera.update boot/rufomaculata.update rk3326-xifan-rf35h.dtb boot.scr extlinux/extlinux.conf linux initrd.lz4; do grep -qx "$f" <<<"$l" || exit 1; done' _ "$BT"
 	chk "boot.tar.xz: niente loader SPI o da riscrivere" \
 		bash -c '! tar -tJf "$1" | grep -qE "u-boot-rockchip-spi\.bin|rkspi_loader\.img|u-boot-sunxi-with-spl\.bin"' _ "$BT"
 	chk "batocera.version accanto (uguale a quella del sistema)" bash -c '[ "$(cat "$1")" = "$2" ]' _ "$DIR/batocera.version" "$VER"

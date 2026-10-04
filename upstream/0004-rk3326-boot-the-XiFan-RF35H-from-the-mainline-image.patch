@@ -1,7 +1,7 @@
-From 9c22c09ee7b35b0c9d4b268bcf019cf3d845b28e Mon Sep 17 00:00:00 2001
+From 6e5d29074a13f37719f9e79da5a7ed916f317e5d Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:58:31 +0200
-Subject: [PATCH 4/4] rk3326: boot the XiFan RF35H from the mainline image
+Subject: [PATCH 4/5] rk3326: boot the XiFan RF35H from the mainline image
 
 The RF35H's DTB goes on the boot partition of the mainline image, with
 an extlinux.conf.rf35h to rename into extlinux.conf, as for the other

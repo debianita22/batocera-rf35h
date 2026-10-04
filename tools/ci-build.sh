@@ -19,8 +19,8 @@
 # BUILD_MINUTES dall'inizio del job; se non ha finito si ferma e la successiva
 # riparte dallo stato: buildroot salta i pacchetti che hanno i loro stamp.
 #
-# Lo stato e' la cartella di buildroot (host, target, images, build) e la
-# ccache, senza i sorgenti scaricati. Prima di impacchettarlo
+# Lo stato e' la cartella di buildroot (host, target, images, build), la
+# ccache e il digest del container, senza i sorgenti scaricati. Prima di impacchettarlo
 # tools/prune-build.sh toglie i file di compilazione dei pacchetti finiti:
 # restano gli stamp, e lo stato passa da decine di GB a pochi.
 #
@@ -97,13 +97,33 @@ cmd_prepare() {
 	mkdir -p "${WORKD}/output" "${WORKD}/dl" "${WORKD}/ccache"
 
 	say "Container di build"
-	local _
-	for _ in 1 2 3; do docker pull -q "${IMAGE}" && break; sleep 30; done
-	docker image inspect "${IMAGE}" >/dev/null 2>&1 || die "${IMAGE} non si scarica"
+	# Lo stesso container in tutte le parti: la parte 1 scrive in
+	# WORKD/container.txt il digest di quello che ha usato (lo stato lo porta
+	# alle parti dopo), che lo riscaricano per digest. Gli strumenti per l'host
+	# costruiti in una parte devono girare nel container della parte dopo, e
+	# Batocera aggiorna "latest" quando vuole. Se Docker Hub non risponde, il
+	# container si costruisce dal Dockerfile del commit fissato.
+	local want="" ref digest _
+	[ -f "${WORKD}/container.txt" ] && want="$(cat "${WORKD}/container.txt")"
+	case "${want}" in
+		"${IMAGE}"@sha256:*) ref="${want}" ;;
+		built:*|'')         ref="${IMAGE}:latest" ;;
+		*) die "WORKD/container.txt: '${want}' non e' un digest di ${IMAGE}" ;;
+	esac
+	for _ in 1 2 3; do docker pull -q "${ref}" && break; sleep 30; done
+	if docker image inspect "${ref}" >/dev/null 2>&1; then
+		[ "${ref}" = "${IMAGE}:latest" ] || docker tag "${ref}" "${IMAGE}:latest"
+		digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "${IMAGE}:latest")"
+	elif [ "${ref}" = "${IMAGE}:latest" ]; then
+		note warning "Container" "${IMAGE} non si scarica: lo costruisco da docker/Dockerfile"
+		docker build -q -t "${IMAGE}:latest" "${TREE}/docker" >/dev/null || die "${IMAGE}: ne' scaricato ne' costruito"
+		digest="built:$(docker image inspect --format '{{.Id}}' "${IMAGE}:latest")"
+	else
+		die "${ref} (il container delle parti precedenti) non si scarica"
+	fi
+	[ -n "${want}" ] || echo "${digest}" > "${WORKD}/container.txt"
 	# il Makefile di Batocera non lo riscarica se trova questo stamp
 	touch "${TREE}/.ba-docker-image-available"
-	local digest
-	digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "${IMAGE}")"
 	echo "  ${digest}"
 
 	say "Elenco dei pacchetti"
@@ -125,13 +145,17 @@ cmd_prepare() {
 # il log completo della build di questa parte
 mainlog() { echo "${W}/build-${RF35H_STAGE:-1}.log"; }
 
+# Il log senza \r e codici di colore: col terminale (docker run -t) buildroot
+# mette ">>> pacchetto versione passo" tra due sequenze di escape.
+plain() { sed -u -e 's/\r$//' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b(B//g' "$@"; }
+
 # pacchetti finiti / totali, e l'ultimo cominciato
 progress() {
 	paths
 	local finished total last
 	finished="$(find "${OUT}/build" -mindepth 2 -maxdepth 2 -name .stamp_installed 2>/dev/null | wc -l)"
 	total="$(wc -l < "${W}/packages.txt" 2>/dev/null || echo '?')"
-	last="$(grep -a '^>>> ' "$(mainlog)" 2>/dev/null | tail -1 | tr -d '\r' | cut -c5-)"
+	last="$( { plain "$(mainlog)" 2>/dev/null || true; } | grep -a '^>>> ' | tail -1 | cut -c5-)"
 	echo "pacchetti finiti ${finished} su ${total}${last:+, ultimo passo: ${last}}"
 }
 
@@ -140,11 +164,11 @@ failure_report() {
 	local log pkg
 	log="$(mainlog)"
 	[ -f "${log}" ] || { echo "nessun log"; return 0; }
-	pkg="$(tr -d '\r' < "${log}" | grep -aoE '/build/[^/ ]+/\.stamp_[a-z_]+\] Error' | tail -1 | sed -E 's|/build/([^/]+)/.*|\1|')"
+	pkg="$(plain "${log}" | grep -aoE '/build/[^/ ]+/\.stamp_[a-z_]+\] Error' | tail -1 | sed -E 's|/build/([^/]+)/.*|\1|')"
 	echo "pacchetto: ${pkg:-sconosciuto}"
-	echo "ultimo passo: $(grep -a '^>>> ' "${log}" | tail -1 | tr -d '\r')"
+	echo "ultimo passo: $(plain "${log}" | grep -a '^>>> ' | tail -1)"
 	echo "---"
-	tr -d '\r' < "${log}" | grep -aiE 'error|fatal:|Illegal instruction|Killed|No space left|cannot|undefined reference|\*\*\*' | tail -25
+	plain "${log}" | grep -aiE 'error|fatal:|Illegal instruction|Killed|No space left|cannot|undefined reference|\*\*\*' | tail -25
 }
 
 cmd_build() {
@@ -182,7 +206,7 @@ cmd_build() {
 		timeout --signal=TERM --kill-after=60 "${budget}" \
 			env RF35H_CONTAINER="${RF35H_CONTAINER}" \
 			"$O/tools/build.sh" --no-apply --tree "${TREE}" --work "${WORKD}" --version "${RF35H_VERSION:-}" 2>&1 \
-			| tee -a "${log}" | tr -d '\r' \
+			| tee -a "${log}" | plain \
 			| grep --line-buffered -aE '^>>> [^ ]+ [^ ]+ Building|^==> |\*\*\* |Error [0-9]+$|No space left'
 		rc=${PIPESTATUS[0]}
 		set -e
@@ -223,7 +247,7 @@ cmd_pack() {
 	say "Stato della parte ${n}"
 	"$O/tools/prune-build.sh" "${OUT}"
 	local t0; t0="$(date +%s)"
-	tar -C "${WORKD}" -cf - output ccache | zstd -q -T0 -3 > "${W}/state-${n}.tar.zst"
+	tar -C "${WORKD}" -cf - output ccache container.txt | zstd -q -T0 -3 > "${W}/state-${n}.tar.zst"
 	local size; size="$(du -h "${W}/state-${n}.tar.zst" | cut -f1)"
 	echo "  ${W}/state-${n}.tar.zst: ${size} in $(( $(date +%s) - t0 )) s"
 	note notice "Stato ${n}" "${size} (output $(du -sh "${WORKD}/output" | cut -f1) dopo la potatura, ccache $(du -sh "${WORKD}/ccache" | cut -f1)); $(progress)"
@@ -238,16 +262,17 @@ cmd_unpack() {
 	mkdir -p "${WORKD}"
 	zstd -q -dc "${f}" | tar -C "${WORKD}" -xf -
 	rm -f "${f}"
-	# Un pacchetto fermato mentre si estraeva o si applicavano le patch non
-	# riparte: le patch gia' applicate non si riapplicano. Senza .stamp_patched
-	# la cartella si toglie e buildroot ricomincia da capo quel pacchetto
-	# (configure, build e install invece riprendono da dove erano).
+	# Il pacchetto che la parte precedente stava costruendo e' stato fermato
+	# con un kill: puo' avere patch applicate a meta' o un oggetto troncato
+	# che make crede valido. Si rifa' da capo: si toglie ogni cartella di
+	# pacchetto (ha .stamp_downloaded o .stamp_rsynced) senza .stamp_installed.
+	# Costa poco: quello che aveva gia' compilato e' nella ccache.
 	local d
 	for d in "${OUT}"/build/*/; do
 		[ -d "${d}" ] || continue
-		[ -f "${d}.stamp_downloaded" ] || continue
-		if [ ! -f "${d}.stamp_patched" ]; then
-			echo "  $(basename "${d}"): fermato prima delle patch, da rifare"
+		[ -f "${d}.stamp_downloaded" ] || [ -f "${d}.stamp_rsynced" ] || continue
+		if [ ! -f "${d}.stamp_installed" ]; then
+			echo "  $(basename "${d}"): interrotto, da rifare"
 			rm -rf "${d}"
 		fi
 	done
@@ -292,7 +317,9 @@ cmd_ccache_stats() {
 	[ -x "${cc}" ] || { echo "ccache non ancora costruita"; return 0; }
 	# la ccache di buildroot e' un programma del container: gira li'
 	local s
-	s="$(docker run --rm -v "${WORKD}:/w" --entrypoint /w/output/rf35h/host/bin/ccache "${IMAGE}" -d /w/ccache -s 2>&1 || true)"
+	# con l'utente della build: ccache -s puo' scrivere nella cache
+	s="$(docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "${WORKD}:/w" \
+		--entrypoint /w/output/rf35h/host/bin/ccache "${IMAGE}" -d /w/ccache -s 2>&1 || true)"
 	echo "${s}"
 	note notice "ccache" "$(grep -iE 'hits|misses|cache size' <<<"${s}" | sort -u | tr -s ' ' | paste -sd ';' -)"
 }

@@ -1,5 +1,5 @@
 # Una parte della build: un job, al massimo 6 ore sui runner gratuiti. La
-# chiama build.yml fino a sei volte di fila. Ogni parte riprende lo stato della
+# chiama build.yml fino a otto volte di fila. Ogni parte riprende lo stato della
 # precedente, costruisce fino a BUILD_MINUTES dall'inizio del job e, se non ha
 # finito, salva lo stato per la successiva (tools/ci-build.sh).
 name: Build stage

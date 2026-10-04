@@ -27,29 +27,38 @@ VER="44-dev-3b66740.rf35h-test 2026/10/04 18:00"
 # $1: cartella di lavoro; $2: la mutazione da fare (vuota: nessuna)
 make_image() {
 	local d="$1" mut="${2:-}"
-	rm -rf "$d"; mkdir -p "$d/root" "$d/boot/boot" "$d/boot/extlinux" "$d/out"
+	rm -rf "$d"; mkdir -p "$d/root" "$d/rufo" "$d/boot/boot" "$d/boot/extlinux" "$d/out"
 
-	# il sistema
-	local r="$d/root"
-	mkdir -p "$r/lib/modules/7.2.8/extra" "$r/lib/firmware" "$r/usr/share/emulationstation" \
-	         "$r/usr/bin" "$r/usr/share/batocera" "$r/usr/lib/libretro"
-	printf 'xx\0rumble setup success (gpio)\n\0yy' > "$r/lib/modules/7.2.8/extra/rocknix-singleadc-joypad.ko"
-	echo rk915 > "$r/lib/modules/7.2.8/extra/rk915.ko"
+	# il sistema: come Batocera, usr/lib/libretro e usr/bin/mame nel secondo
+	# squashfs (rufomaculata), il resto nel primo
+	local r="$d/root" u="$d/rufo"
+	mkdir -p "$r/lib/modules/7.2.8/updates" "$r/lib/firmware" "$r/usr/share/emulationstation" \
+	         "$r/usr/bin" "$r/usr/share/batocera" "$r/etc/modprobe.d" "$u/usr/lib/libretro"
+	printf 'xx\0rumble setup success (gpio)\n\0yy' > "$r/lib/modules/7.2.8/updates/rocknix-singleadc-joypad.ko"
+	echo rk915 > "$r/lib/modules/7.2.8/updates/rk915.ko"
 	echo fw > "$r/lib/firmware/rk915_fw.bin"; echo patch > "$r/lib/firmware/rk915_patch.bin"
+	cp "$TREE/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf" "$r/etc/modprobe.d/"
 	cp "$TREE/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg" "$r/usr/share/emulationstation/"
 	cp "$TREE/package/batocera/core/batocera-scripts/scripts/batocera-upgrade" "$r/usr/bin/"
 	echo "$VER" > "$r/usr/share/batocera/batocera.version"
-	echo core > "$r/usr/lib/libretro/mame078plus_libretro.so"
+	local c
+	for c in gambatte snes9x mgba fbneo mame078plus pcsx_rearmed flycastvl melonds; do
+		echo core > "$u/usr/lib/libretro/${c}_libretro.so"
+	done
 	case "$mut" in
-		joypad-unpatched) echo plain > "$r/lib/modules/7.2.8/extra/rocknix-singleadc-joypad.ko" ;;
+		joypad-unpatched) echo plain > "$r/lib/modules/7.2.8/updates/rocknix-singleadc-joypad.ko" ;;
 		no-rk915-fw)      rm "$r/lib/firmware/rk915_patch.bin" ;;
 		es-hotkey-mode)   sed -i '/deviceName="XiFan RF35H Gamepad"/,/<\/inputConfig>/ s|<input name="hotkey" type="button" id="8" value="1" code="314" />|<input name="hotkey" type="button" id="10" value="1" code="316" />|' "$r/usr/share/emulationstation/es_input.cfg" ;;
 		upgrade-official) sed -i 's|^G_UPDATEURL=.*|G_UPDATEURL="https://updates.batocera.org"|' "$r/usr/bin/batocera-upgrade" ;;
 		version-plain)    echo "44-dev-3b66740 2026/10/04 18:00" > "$r/usr/share/batocera/batocera.version" ;;
-		not-slim)         mkdir -p "$r/usr/bin/mame" && echo x > "$r/usr/bin/mame/mame" ;;
-		not-slim-core)    echo core > "$r/usr/lib/libretro/mame_libretro.so" ;;
+		not-slim)         mkdir -p "$u/usr/bin/mame" && echo x > "$u/usr/bin/mame/mame" ;;
+		not-slim-core)    echo core > "$u/usr/lib/libretro/mame_libretro.so" ;;
+		not-slim-kodi)    mkdir -p "$r/usr/lib/kodi" && echo x > "$r/usr/lib/kodi/kodi.bin" ;;
+		no-core-fbneo)    rm "$u/usr/lib/libretro/fbneo_libretro.so" ;;
+		no-rk915-alias)   rm "$r/etc/modprobe.d/rk915.conf" ;;
 	esac
-	mksquashfs "$r" "$d/system.squashfs" -quiet -noappend -comp gzip >/dev/null
+	mksquashfs "$r" "$d/system.squashfs" -quiet -noappend -comp zstd >/dev/null
+	mksquashfs "$u" "$d/rufo.squashfs" -quiet -noappend -comp zstd >/dev/null
 
 	# la partizione di avvio
 	local b="$d/boot"
@@ -67,7 +76,8 @@ make_image() {
 	esac
 	mkimage -C none -A arm64 -T script -n batocera-rf35h -d "$d/boot.cmd" "$b/boot.scr" >/dev/null
 	cp "$d/system.squashfs" "$b/boot/batocera.update"
-	echo rufo > "$b/boot/rufomaculata.update"
+	cp "$d/rufo.squashfs" "$b/boot/rufomaculata.update"
+	[ "$mut" = no-rufo-update ] && rm "$b/boot/rufomaculata.update"
 	echo "rf35h" > "$b/boot/batocera.board"
 	[ "$mut" = board-other ] && echo "rk3326" > "$b/boot/batocera.board"
 	echo "# conf" > "$b/batocera-boot.conf"
@@ -79,7 +89,7 @@ make_image() {
 	[ "$mut" = spi-loader ] && { echo spi > "$b/boot/u-boot-rockchip-spi.bin"; (cd "$b" && tar -cJf "$d/out/boot.tar.xz" -- *); md5sum "$d/out/boot.tar.xz" | cut -d' ' -f1 > "$d/out/boot.tar.xz.md5"; rm "$b/boot/u-boot-rockchip-spi.bin"; }
 	# nell'immagine il sistema si chiama boot/batocera (post-image-script.sh)
 	mv "$b/boot/batocera.update" "$b/boot/batocera"
-	mv "$b/boot/rufomaculata.update" "$b/boot/rufomaculata"
+	cp "$d/rufo.squashfs" "$b/boot/rufomaculata"; rm -f "$b/boot/rufomaculata.update"
 
 	# la FAT (64 MiB bastano) e la scheda
 	local fat="$d/boot.vfat"
@@ -118,7 +128,8 @@ fi
 echo "==> mutazioni (ognuna deve dare NON conforme)"
 for m in loader-flip fat-at-8m not-bootable console-ttys2 fdt-other scr-low-kernel board-other \
          dtb-old-joypad dtb-no-rumble dtb-58hz joypad-unpatched no-rk915-fw es-hotkey-mode \
-         upgrade-official version-plain not-slim not-slim-core md5-wrong spi-loader; do
+         upgrade-official version-plain not-slim not-slim-core not-slim-kodi no-core-fbneo \
+         no-rk915-alias no-rufo-update md5-wrong spi-loader; do
 	make_image "$W/$m" "$m"
 	if run_verify "$W/$m"; then
 		echo "  NO  $m: risulta conforme"; fail=$((fail + 1))

@@ -92,6 +92,18 @@ proprio su `BTN_MODE`: irraggiungibile. Il pad ha quindi un'identita' sua
 dispositivo di Batocera) e una voce in `es_input.cfg` (0003) uguale a quella
 di `retrogame_joypad` ma con l'hotkey su Select, come `odroidgo2_v11_joypad`.
 
+**Caricamento di `rk915`.** Il driver accende il chip da se', e la scheda
+SDIO a cui si lega compare solo dopo: il modulo si caricava solo dal modalias
+SDIO, cioe' solo se il chip era gia' acceso al boot, e RK3326 non ha un
+`/etc/modules.conf` (che `S06modprobe` leggerebbe). La patch 0005 aggiunge
+`/etc/modprobe.d/rk915.conf` con un alias sul modalias OF del nodo
+`rockchip,rk915` (`of:N*T*Crockchip,rk915*`): udev carica il modulo quando
+compare quel dispositivo, qualunque sia lo stato della linea di
+alimentazione. Le board senza quel nodo non corrispondono. Serve anche alla
+R36 Ultra. La linea host-wake (GPIO0_A5) ha il pull-down come sul firmware
+originale, nel `pinctrl-0` di `&sdio` (un pinctrl sul nodo `rk915-wifi` non
+verrebbe applicato: nessun driver si lega a quel dispositivo).
+
 **Fix DSI `r-025` di Lakka: non c'e'.** Su Lakka c'era, e non si era mai
 provato senza. In Batocera manca, e i sette dispositivi RK3326 col driver
 `generic-dsi` (tutti con `flags=0xe03`, come l'RF35H) funzionano senza. Prima
@@ -130,7 +142,10 @@ kernel (`uboot.hwid_adc=`), si legge da `/proc/cmdline` sulla console.
   Moonlight con Qt 6. 847 pacchetti invece di 978. MAME 2003-Plus resta.
 - **squashfs zstd** invece di gzip, come per la maggior parte delle board
   ARM di Batocera (il kernel RK3326 ha `SQUASHFS_ZSTD`): `boot.tar.xz` deve
-  stare sotto i 2 GiB che GitHub accetta per un file di release.
+  stare sotto i 2 GiB che GitHub accetta per un file di release. Il sistema
+  e' in due squashfs: `boot/batocera` e `boot/rufomaculata`, dove Batocera
+  mette `usr/lib/libretro` (tutti i core) e `usr/bin/mame` (`external.mk`;
+  l'initrd li monta insieme). `verify-image.sh` li legge tutti e due.
 - **Aggiornamenti dalle release**: `batocera-upgrade` di default guarda
   `https://github.com/<repo>/releases/latest/download` (il repo lo mette
   `apply.sh`, in CI quello che costruisce), dove `boot.tar.xz`, la `.md5` e
@@ -149,8 +164,9 @@ kernel (`uboot.hwid_adc=`), si legge da `/proc/cmdline` sulla console.
 Il CI di Batocera su GitHub fa solo controlli: le loro build girano altrove.
 Qui la build gira sui runner gratuiti, come per Lakka, a parti:
 
-- fino a **sei parti** da 6 ore (Lakka ne aveva quattro: qui i pacchetti sono
-  847 contro 340, con LLVM e Clang per host e target);
+- fino a **otto parti** da 6 ore (Lakka ne aveva quattro: qui i pacchetti sono
+  847 contro 340, con LLVM e Clang per host e target); quando una finisce le
+  immagini, le successive sono saltate;
 - tra una parte e l'altra lo stato e' la cartella di buildroot e la ccache,
   senza sorgenti; prima di impacchettarlo `prune-build.sh` toglie gli
   oggetti dei pacchetti finiti (ne restano gli stamp, e make non li rifa').
@@ -159,8 +175,24 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   `batocera-initramfs`): cercato nei `.mk` di Batocera e di buildroot, nessun
   altro pacchetto legge la cartella di un altro;
 - durante la build, sotto i 40 GB liberi, la stessa potatura ogni 5 minuti;
-- un pacchetto fermato prima di `.stamp_patched` si rifa' da capo alla parte
-  dopo (le patch non si riapplicano su un albero gia' patchato a meta');
+- il pacchetto che la parte precedente stava costruendo (fermato con un kill:
+  patch a meta', oggetti troncati che make crederebbe validi) si rifa' da capo
+  alla parte dopo: si toglie ogni cartella senza `.stamp_installed`. Quello
+  che aveva gia' compilato e' nella ccache;
+- **date fisse**: `apply.sh` mette 1/1/2026 su tutti i file dell'albero. Git
+  scrive i file con l'ora del checkout, e buildroot riconfigura un pacchetto
+  kconfig quando il file della configurazione e' piu' recente della `.config`
+  costruita: `linux` e `batocera-initramfs` (busybox) si sarebbero rifatti a
+  ogni parte;
+- **lo stesso container in tutte le parti**: la parte 1 scrive il digest di
+  `batoceralinux/batocera.linux-build` che ha usato, lo stato lo porta, le
+  parti dopo lo riscaricano per digest (gli strumenti per l'host costruiti
+  in una parte devono girare nel container della parte dopo, e Batocera
+  aggiorna "latest" quando vuole). Se Docker Hub non risponde, il container
+  si costruisce dal `docker/Dockerfile` del commit fissato;
+- nel log delle actions solo l'inizio di ogni pacchetto e gli errori, dopo
+  aver tolto `\r` e i codici di colore (`docker run -t`: buildroot colora le
+  righe `>>>`);
 - l'immagine rf35h passa da `verify-image.sh` prima della release; ogni file
   deve stare sotto i 2 GiB.
 
@@ -177,10 +209,10 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
 - `test-upgrade.sh` 10/10 (controllo, aggiornamento, board sbagliata, md5
   sbagliata, `updates.url` di Batocera con stable e butterfly). Controprova:
   senza la riga `validate_arch` il caso "board sbagliata" fallisce.
-- `test-verify-image.sh`: immagine giusta conforme, 19 mutazioni (loader,
-  partizioni, console, FDT, boot.scr, board, DTB, moduli, firmware,
-  es_input, URL, versione, profilo snello, md5, loader SPI) tutte
-  rilevate.
+- `test-verify-image.sh`: immagine giusta conforme, 23 mutazioni (loader,
+  partizioni, console, FDT, boot.scr, board, DTB, moduli, firmware, alias di
+  rk915, es_input, URL, versione, core, profilo snello nei due squashfs,
+  md5, loader SPI) tutte rilevate.
 - Il comando docker che `make rf35h-build` esegue (dry run del Makefile di
   Batocera): due `docker run`, defconfig poi build, con `--name rf35h-build`
   e le cartelle fuori dall'albero.

@@ -1,7 +1,7 @@
-From 1b77c11539eb410c28c86420c3b8063a9f6ffb88 Mon Sep 17 00:00:00 2001
+From 4d8fa51ba4281623fd6e3d09db474e640b08f2bf Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:57:07 +0200
-Subject: [PATCH 1/4] rk3326: add the XiFan RF35H device tree
+Subject: [PATCH 1/5] rk3326: add the XiFan RF35H device tree
 
 The XiFan RF35H (sold as XF35H too): RK3326, 640x480 MIPI-DSI panel on
 the generic-dsi driver, RK817 PMIC, RK915 Wi-Fi, two sticks on one SARADC
@@ -31,17 +31,17 @@ Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 ---
- .../dts/rockchip/rk3326-xifan-rf35h.dts       | 976 ++++++++++++++++++
+ .../dts/rockchip/rk3326-xifan-rf35h.dts       | 984 ++++++++++++++++++
  configs/batocera-rk3326.board                 |   2 +-
- 2 files changed, 977 insertions(+), 1 deletion(-)
+ 2 files changed, 985 insertions(+), 1 deletion(-)
  create mode 100644 board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts
 
 diff --git a/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts b/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts
 new file mode 100644
-index 0000000..108ea86
+index 0000000..124627f
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts
-@@ -0,0 +1,976 @@
+@@ -0,0 +1,984 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +/*
 + * XiFan RF35H: RK3326, 640x480 MIPI-DSI panel, RK817 PMIC, RK915 Wi-Fi,
@@ -881,9 +881,11 @@ index 0000000..108ea86
 +
 +/*
 + * RK915 Wi-Fi. No mmc-pwrseq and not non-removable: the rk915 driver powers
-+ * the chip and asks for the rescan itself (see rk915-wifi above).
++ * the chip and asks for the rescan itself (see rk915-wifi above). The
++ * host-wake line is pulled down, as on the stock firmware.
 + */
 +&sdio {
++	pinctrl-0 = <&sdio_bus4 &sdio_cmd &sdio_clk &wifi_host_wake_l>;
 +	bus-width = <4>;
 +	cap-sd-highspeed;
 +	keep-power-in-suspend;
@@ -1015,6 +1017,12 @@ index 0000000..108ea86
 +	speaker {
 +		spk_amp_enable_h: spk-amp-enable-h {
 +			rockchip,pins = <3 RK_PA7 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	wifi {
++		wifi_host_wake_l: wifi-host-wake-l {
++			rockchip,pins = <0 RK_PA5 RK_FUNC_GPIO &pcfg_pull_down>;
 +		};
 +	};
 +};

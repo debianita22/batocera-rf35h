@@ -1,0 +1,37 @@
+From 8361fe807b646197512086c00f9cd1581c4651d5 Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Mon, 5 Oct 2026 01:21:28 +0200
+Subject: [PATCH 5/5] rk3326: load rk915 for its device tree node
+
+The rk915 driver powers the chip itself (no mmc-pwrseq): the SDIO card
+it binds to only appears once the module is loaded. The module was only
+ever loaded through that card's SDIO modalias, i.e. only when the chip
+happened to be powered at boot, and RK3326 has no modules.conf.
+
+A modprobe alias on the OF modalias of the rockchip,rk915 node (R36
+Ultra, XiFan RF35H) makes udev load it when that platform device
+appears, whatever the state of the power line. Boards without the node
+never match it.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf      | 5 +++++
+ 1 file changed, 5 insertions(+)
+ create mode 100644 board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf
+
+diff --git a/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf b/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf
+new file mode 100644
+index 0000000..d4700b6
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf
+@@ -0,0 +1,5 @@
++# The rk915 Wi-Fi driver powers the chip itself, and its SDIO card only
++# appears afterwards: if the chip is off at boot, nothing would load the
++# module. Load it for the rockchip,rk915 device tree node instead (R36 Ultra,
++# XiFan RF35H); boards without that node never match.
++alias of:N*T*Crockchip,rk915* rk915
+-- 
+2.43.0
+
