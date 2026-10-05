@@ -179,14 +179,39 @@ mainlog() { echo "${W}/build-${RF35H_STAGE:-1}.log"; }
 # mette ">>> pacchetto versione passo" tra due sequenze di escape.
 plain() { sed -u -e 's/\r$//' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b(B//g' "$@"; }
 
-# pacchetti finiti / totali, e l'ultimo cominciato
+# pacchetti finiti / totali, e l'ultimo passo fatto (lo stamp piu' recente:
+# non serve leggere un log di GB)
 progress() {
 	paths
 	local finished total last
 	finished="$(find "${OUT}/build" -mindepth 2 -maxdepth 2 -name .stamp_installed 2>/dev/null | wc -l)"
 	total="$(wc -l < "${W}/packages.txt" 2>/dev/null || echo '?')"
-	last="$( { plain "$(mainlog)" 2>/dev/null || true; } | grep -a '^>>> ' | tail -1 | cut -c5-)"
+	# shellcheck disable=SC2012
+	last="$(ls -t "${OUT}"/build/*/.stamp_* 2>/dev/null | head -1 | sed -E 's|.*/build/([^/]+)/\.stamp_(.*)|\1 \2|')"
 	echo "pacchetti finiti ${finished} su ${total}${last:+, ultimo passo: ${last}}"
+}
+
+# Lo stato del commit (contesto build/parte-N), letto dall'API e mostrato da
+# GitHub accanto al commit: l'unico modo di seguire una parte mentre gira
+# (log e artifact arrivano solo alla fine). Serve GH_TOKEN con statuses:write;
+# un errore qui non ferma niente.
+status() {	# stato (pending|success|failure) descrizione
+	[ -n "${GITHUB_ACTIONS:-}" ] && [ -n "${GH_TOKEN:-}" ] || return 0
+	local desc="$2"
+	[ "${#desc}" -le 140 ] || desc="${desc:0:137}..."
+	gh api -X POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+		-f state="$1" -f context="build/parte-${RF35H_STAGE:-1}" -f description="${desc}" \
+		-f target_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID:-}" \
+		>/dev/null 2>&1 || true
+}
+short_progress() {	# "123/847 llvm-21.1.0 built, 80 GB, 42 min"
+	paths
+	local finished total last
+	finished="$(find "${OUT}/build" -mindepth 2 -maxdepth 2 -name .stamp_installed 2>/dev/null | wc -l)"
+	total="$(wc -l < "${W}/packages.txt" 2>/dev/null || echo '?')"
+	# shellcheck disable=SC2012
+	last="$(ls -t "${OUT}"/build/*/.stamp_* 2>/dev/null | head -1 | sed -E 's|.*/build/([^/]+)/\.stamp_(.*)|\1 \2|')"
+	echo "${finished}/${total} ${last:-?}, $(gb "${W}") GB liberi, $(( ($(date +%s) - ${JOB_START:-$(date +%s)}) / 60 )) min"
 }
 
 # Il pacchetto fallito e le ultime righe utili del log
@@ -219,8 +244,14 @@ cmd_build() {
 		done
 	) &
 	local pruner=$!
+	# l'avanzamento ogni 10 minuti nello stato del commit
+	(
+		while sleep 600; do status pending "$(short_progress)"; done
+	) &
+	local reporter=$!
 	# shellcheck disable=SC2064
-	trap "kill ${pruner} 2>/dev/null || true" EXIT
+	trap "kill ${pruner} ${reporter} 2>/dev/null || true" EXIT
+	status pending "build iniziata: $(short_progress)"
 	while : ; do
 		budget=$(( deadline - $(date +%s) ))
 		if [ "${budget}" -lt 1200 ]; then
@@ -259,8 +290,13 @@ cmd_build() {
 		fi
 		break
 	done
-	kill "${pruner}" 2>/dev/null || true
+	kill "${pruner}" "${reporter}" 2>/dev/null || true
 	[ -f "${W}/prune.log" ] && { echo "potature durante la build:"; cat "${W}/prune.log"; }
+	case "${result}" in
+		done)     status success "immagini fatte: $(short_progress)" ;;
+		continue) status success "continua nella parte $(( ${RF35H_STAGE:-1} + 1 )): $(short_progress)" ;;
+		*)        status failure "fallita ($(failure_report | sed -n 's/^pacchetto: //p')): $(short_progress)" ;;
+	esac
 	echo "uscita ${rc}: ${result}"
 	out "result=${result}"
 	summ "- build: uscita ${rc} (${result}) dopo $(( ($(date +%s) - now) / 60 )) minuti, tentativi ${try}; $(progress)"

@@ -50,6 +50,7 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: write   # l'avanzamento delle parti, nello stato del commit
 
 concurrency:
   group: build-${{ github.ref }}

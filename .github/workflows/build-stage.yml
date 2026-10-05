@@ -33,6 +33,7 @@ on:
 permissions:
   contents: read
   actions: read     # artifact di un altro run (resume_run)
+  statuses: write   # l'avanzamento (ci-build.sh status)
 
 jobs:
   build:
@@ -129,6 +130,8 @@ jobs:
 
       - name: Build
         id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./tools/ci-build.sh build
 
       - name: ccache, statistiche

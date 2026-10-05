@@ -197,6 +197,10 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   deve stare sotto i 2 GiB. Se un controllo fallisce, i file si caricano lo
   stesso come artifact (dopo decine di ore di build servono comunque, per
   provarli o capire cosa non va), e il job fallisce dopo (`verdict`);
+- **avanzamento**: ogni 10 minuti la parte aggiorna lo stato del commit
+  `build/parte-N` (pacchetti finiti, ultimo passo, disco libero, minuti):
+  si vede su GitHub accanto al commit e dall'API, mentre log e annotazioni
+  arrivano solo a fine parte;
 - **ripresa**: una parte fallita salva il suo stato (3 giorni). *Run workflow*
   con `resume_run` = l'ID di quel run riparte da li' con le patch del commit
   nuovo (solo build di prova, mai una release); `rebuild` elenca i pacchetti

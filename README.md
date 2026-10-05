@@ -90,7 +90,9 @@ tests of the update script and of the image checker.
   A `v*` tag (or *Run workflow* with a version) publishes a release; a tag
   with a dash is a pre-release, which consoles do not update to. *Run
   workflow* without a version, or a push to `ci-test/**`, makes a test build
-  whose images stay in the run's artifacts. A failed part saves its state
+  whose images stay in the run's artifacts. While a part runs, its progress
+  (packages done, current step, free disk) is the commit status
+  `build/parte-N`, updated every 10 minutes. A failed part saves its state
   for three days: *Run workflow* with `resume_run` (that run's ID), and
   `rebuild` listing the packages whose patches changed, resumes from it.
 
