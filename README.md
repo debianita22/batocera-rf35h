@@ -80,7 +80,10 @@ device tree: `tools/build.sh linux-rebuild`), then a normal build.
 Quick checks without building (a few minutes): `tools/ci-check.sh`. It
 applies the series, configures the `rf35h` target, compiles the device tree
 and the joypad and Wi-Fi modules against Batocera's kernel, and runs the
-tests of the update script and of the image checker.
+tests of the update script, of the image checker, of the CI steps and of the
+image step itself: Batocera's post-image script with our image scripts and
+Buildroot's genimage, on dummy files, so that a mistake there shows up in
+minutes rather than at the end of a day-long build.
 
 ## CI and releases
 
@@ -106,7 +109,7 @@ tests of the update script and of the image checker.
 | `tools/apply.sh`, `tools/build.sh` | prepare the tree, build |
 | `tools/verify-image.sh` | what a finished RF35H image must contain |
 | `tools/check-dtb.sh` | device tree and modules against Batocera's kernel |
-| `tools/test-*.sh` | tests of the update script, of the image checker and of the CI steps |
+| `tools/test-*.sh` | tests of the update script, of the image checker, of the CI steps and of the image step |
 | `tools/ci-*.sh`, `tools/prune-build.sh` | the CI steps |
 | `docs/diario.md` | decisions and verification log (Italian) |
 

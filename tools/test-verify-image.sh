@@ -5,6 +5,10 @@
 #   tools/test-verify-image.sh --make-image BATOCERA_TREE DTB OUT [MUTAZIONE]
 #       solo l'immagine finta (con la mutazione, se c'e'), in OUT: la usa
 #       tools/test-ci-build.sh
+#   tools/test-verify-image.sh --make-system BATOCERA_TREE DTB OUT
+#       solo i due squashfs giusti, coi nomi che hanno nella cartella delle
+#       immagini di buildroot (rootfs.squashfs, rufomaculata), e la loro
+#       batocera.version: li usa tools/test-image-step.sh
 #
 # BATOCERA_TREE: l'albero dopo tools/apply.sh (ne prende extlinux.conf,
 # boot.cmd, es_input.cfg e batocera-upgrade veri); DTB: rk3326-xifan-rf35h.dtb
@@ -18,7 +22,10 @@
 set -euo pipefail
 
 MAKE_ONLY=""
-if [ "${1:-}" = --make-image ]; then MAKE_ONLY=yes; shift; fi
+case "${1:-}" in
+	--make-image)  MAKE_ONLY=image;  shift ;;
+	--make-system) MAKE_ONLY=system; shift ;;
+esac
 TREE="${1:?uso: test-verify-image.sh BATOCERA_TREE DTB}"
 DTB_IN="${2:?uso: test-verify-image.sh BATOCERA_TREE DTB}"
 O="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,13 +36,12 @@ export MTOOLS_SKIP_CHECK=1
 RF="$TREE/board/batocera/rockchip/rk3326/rf35h"
 VER="44-dev-rf35h-test 2026/10/04 18:00"
 
-# $1: cartella di lavoro; $2: la mutazione da fare (vuota: nessuna)
-make_image() {
+# il sistema in $1/system.squashfs e $1/rufo.squashfs: come Batocera,
+# usr/lib/libretro e usr/bin/mame nel secondo (rufomaculata), il resto nel
+# primo; $2: la mutazione da fare (vuota: nessuna)
+make_system() {
 	local d="$1" mut="${2:-}"
-	rm -rf "$d"; mkdir -p "$d/root" "$d/rufo" "$d/boot/boot" "$d/boot/extlinux" "$d/out"
-
-	# il sistema: come Batocera, usr/lib/libretro e usr/bin/mame nel secondo
-	# squashfs (rufomaculata), il resto nel primo
+	rm -rf "$d/root" "$d/rufo"; mkdir -p "$d/root" "$d/rufo"
 	local r="$d/root" u="$d/rufo"
 	mkdir -p "$r/lib/modules/7.2.8/updates" "$r/lib/firmware" "$r/usr/share/emulationstation" \
 	         "$r/usr/bin" "$r/usr/share/batocera" "$r/etc/modprobe.d" "$u/usr/lib/libretro"
@@ -67,6 +73,13 @@ make_image() {
 	esac
 	mksquashfs "$r" "$d/system.squashfs" -quiet -noappend -comp zstd >/dev/null
 	mksquashfs "$u" "$d/rufo.squashfs" -quiet -noappend -comp zstd >/dev/null
+}
+
+# $1: cartella di lavoro; $2: la mutazione da fare (vuota: nessuna)
+make_image() {
+	local d="$1" mut="${2:-}"
+	rm -rf "$d"; mkdir -p "$d/boot/boot" "$d/boot/extlinux" "$d/out"
+	make_system "$d" "$mut"
 
 	# la partizione di avvio
 	local b="$d/boot"
@@ -124,11 +137,19 @@ make_image() {
 
 run_verify() { "$O/tools/verify-image.sh" "$1/out" > "$1/verify.log" 2>&1; }
 
-if [ -n "$MAKE_ONLY" ]; then
+if [ "$MAKE_ONLY" = image ]; then
 	DEST="${3:?uso: test-verify-image.sh --make-image BATOCERA_TREE DTB OUT [MUTAZIONE]}"
 	make_image "$W/img" "${4:-}"
 	mkdir -p "$DEST"
 	cp "$W/img/out"/* "$DEST/"
+	exit 0
+elif [ "$MAKE_ONLY" = system ]; then
+	DEST="${3:?uso: test-verify-image.sh --make-system BATOCERA_TREE DTB OUT}"
+	make_system "$W/sys"
+	mkdir -p "$DEST"
+	cp "$W/sys/system.squashfs" "$DEST/rootfs.squashfs"
+	cp "$W/sys/rufo.squashfs" "$DEST/rufomaculata"
+	echo "$VER" > "$DEST/batocera.version"
 	exit 0
 fi
 

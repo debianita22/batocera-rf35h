@@ -289,6 +289,44 @@ sola, prima che il driver accenda il chip). La R36 Ultra di Batocera ha lo
 stesso nodo e il driver dice di funzionare. Se sull'RF35H il Wi-Fi non
 compare: `broken-cd` in `&sdio` (polling ogni secondo) e' la prima prova.
 
+## L'ultimo passo, provato subito (5/10/2026)
+
+In una build vera `post-image-script.sh` gira una volta sola, alla fine
+dell'ultima parte: un errore nel nostro `create-boot-script.sh`, nel nostro
+`genimage.cfg` o nell'`extlinux.conf.rf35h` della mainline si sarebbe visto
+dopo un giorno e piu' di build. `tools/test-image-step.sh` lo fa girare in
+tre minuti, come lo chiama buildroot (`$(EXTRA_ENV) script $(BINARIES_DIR)`,
+lo script ha `#!/bin/bash -e`), col `.config` vero del target rf35h, su una
+cartella delle immagini finta: kernel, initrd, U-Boot mainline e DTB delle
+altre console finti; i due squashfs di `test-verify-image.sh`
+(`--make-system`); il nostro DTB e il loader known-good veri. genimage e'
+quello del buildroot fissato (19, sorgente da GitHub controllato con
+`genimage.hash`); mkimage, mtools, dosfstools ed e2fsprogs quelli del
+sistema. Poi `ci-build.sh collect` e `verdict` sulla cartella che ne esce.
+
+Risultato: le due immagini si fanno, coi nomi che si aspetta la CI
+(`batocera-rk3326-rf35h-44-<data>.img.gz`: il target di Batocera resta
+RK3326, la sotto-immagine e' rf35h), `verify-image.sh` dice "Conforme"
+sull'immagine fatta dagli script veri, U-Boot mainline sta a 32K, 8M e 12M,
+nella FAT della mainline ci sono il nostro DTB e `extlinux.conf.rf35h` con
+ttyS1, `collect` mette i file giusti in dist e upstream, `verdict` passa.
+Controprove: loader a 16K invece che a 32K -> `verify-image` lo vede; loader
+a 64K -> genimage rifiuta (si sovrappone alla FAT a 16M); console della
+RF35H non cambiata nella mainline -> il controllo di extlinux.conf.rf35h
+fallisce.
+
+Stato dei test (tutti in `ci-check.sh`, quindi a ogni push e prima di ogni
+build): `test-upgrade` 12, `test-verify-image` 26 (l'immagine giusta e 25
+mutazioni), `test-ci-build` 20, `test-image-step` 9.
+
+Cercati anche, nei .mk degli 847 pacchetti, scaricamenti fuori dalla fase di
+download (che, come `cargo-c`, prenderebbero l'ultima versione di qualcosa):
+`cgenius` clona cosmos ma lo fissa a un commit, `mangohud` scarica i wrap di
+meson (versioni e hash nei file .wrap), `xone` scarica firmware Microsoft
+con hash e senza fallire se manca. Nessuna versione su un ramo (`master`,
+`main`...): quelli senza versione sono pacchetti locali o virtuali. Nessun
+altro rischio di quel tipo.
+
 ## Verificato (host x86_64, 4/10/2026)
 
 - `tools/ci-check.sh` intero, 131 s: script (shellcheck, actionlint),

@@ -16,14 +16,17 @@
 #      e quelli che il profilo snello toglie (Kodi, MAME attuale, Moonlight)
 #   5. kernel: tools/check-dtb.sh (DTB con W=1, joypad e rk915 compilati)
 #   6. test: test-upgrade.sh (batocera-upgrade verso le release),
-#      test-verify-image.sh (il controllo dell'immagine, giusta e rotta) e
+#      test-verify-image.sh (il controllo dell'immagine, giusta e rotta),
 #      test-ci-build.sh (stato tra le parti, ripresa, raccolta delle immagini)
+#      e test-image-step.sh (post-image-script.sh di Batocera con i nostri
+#      script delle immagini, su file finti: l'ultimo passo della build)
 #
-#   --quick salta 5, test-verify-image e la parte di test-ci-build che usa il
-#   DTB (niente kernel da scaricare).
+#   --quick salta 5, test-verify-image, test-image-step e la parte di
+#   test-ci-build che usa il DTB (niente kernel da scaricare).
 #
 # Serve: git, make, gcc, patch, python3, shellcheck, squashfs-tools, mtools,
-# device-tree-compiler, u-boot-tools, fdisk; per 5 anche gcc-aarch64-linux-gnu.
+# device-tree-compiler, u-boot-tools, fdisk; per 5 anche gcc-aarch64-linux-gnu;
+# per test-image-step curl, pkg-config, libconfuse-dev, dosfstools, e2fsprogs.
 set -euo pipefail
 
 O="$(cd "$(dirname "$0")/.." && pwd)"
@@ -117,6 +120,7 @@ say "6. Test"
 if [ "$QUICK" = no ]; then
 	"$O/tools/test-verify-image.sh" "$TREE" "$WORK/kernel/rk3326-xifan-rf35h.dtb"
 	"$O/tools/test-ci-build.sh" "$TREE" "$WORK/kernel/rk3326-xifan-rf35h.dtb"
+	"$O/tools/test-image-step.sh" "$TREE" "$WORK/kernel/rk3326-xifan-rf35h.dtb" "$OUT/.config" "$WORK/genimage"
 else
 	"$O/tools/test-ci-build.sh" "$TREE"
 fi
