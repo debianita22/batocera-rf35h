@@ -282,8 +282,15 @@ pacchetto libmspack di buildroot non ha la variante host, e nella build c'e'
 solo `host-cabextract`; il `.mk` di Batocera per l'host trovava libmspack
 nel container, se lo trovava), e make si e' fermato subito senza regola.
 Ora il tool per l'host si compila coi sorgenti libmspack dell'archivio
-(`--without-external-libmspack`), provato anche questo. Anche questo da
-proporre a Batocera.
+(`--without-external-libmspack`), provato anche questo. Seconda versione
+sbagliata: Batocera ha `001-fixfnmatch.patch`, che tocca `config.h.in`;
+nell'albero git quel file non c'e' (lo genera autoreconf) e la patch non
+si applica. Il tentativo 2 della CI ha mostrato solo "duplicate filename"
+(la lista delle patch applicate restava dal tentativo 1): l'errore vero era
+nel primo. La patch serviva al cross-compile, dove `AC_REPLACE_FNMATCH` non
+puo' eseguire il suo test e sostituisce fnmatch con il suo: stesso effetto
+con `CABEXTRACT_CONF_ENV = ac_cv_func_fnmatch_works=yes`, e la patch va
+via. Anche questo da proporre a Batocera.
 
 ## Revisione indipendente (5/10/2026)
 

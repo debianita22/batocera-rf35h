@@ -1,4 +1,4 @@
-From 1b37ba2fb36be26b16be36c7469c519dcbdfde40 Mon Sep 17 00:00:00 2001
+From 383457d68c6d43e903b384151239ce574363dd60 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 21:25:01 +0200
 Subject: [PATCH 6/6] cabextract: fetch the sources from GitHub
@@ -9,21 +9,48 @@ at host-cabextract. The same sources are the cabextract/ directory of
 kyz/libmspack on GitHub, tag v1.11: use that archive with a subdirectory
 and autoreconf (the git tree has no configure script; AM_ICONV needs
 gettext's m4 files). The host tool builds with the bundled libmspack
-sources, since there is no host-libmspack package. Verified: autoreconf,
-configure and make from that tree give cabextract 1.11, with the bundled
-sources and with an external libmspack.
+sources, since there is no host-libmspack package.
+
+001-fixfnmatch.patch edited config.h.in, which autoreconf now generates:
+the configure cache variable ac_cv_func_fnmatch_works=yes has the same
+effect for the cross-compiled target (AC_REPLACE_FNMATCH cannot run its
+test there and would substitute its own fnmatch).
+
+Verified: autoreconf, configure and make from that tree give cabextract
+1.11, with the bundled sources and with an external libmspack.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 ---
- .../batocera/utils/cabextract/cabextract.mk   | 21 +++++++++++++++----
- 1 file changed, 17 insertions(+), 4 deletions(-)
+ .../utils/cabextract/001-fixfnmatch.patch     | 13 ----------
+ .../batocera/utils/cabextract/cabextract.mk   | 26 ++++++++++++++++---
+ 2 files changed, 22 insertions(+), 17 deletions(-)
+ delete mode 100644 package/batocera/utils/cabextract/001-fixfnmatch.patch
 
+diff --git a/package/batocera/utils/cabextract/001-fixfnmatch.patch b/package/batocera/utils/cabextract/001-fixfnmatch.patch
+deleted file mode 100644
+index e54eafc1..00000000
+--- a/package/batocera/utils/cabextract/001-fixfnmatch.patch
++++ /dev/null
+@@ -1,13 +0,0 @@
+-diff --git a/config.h.in b/config.h.in
+-index c2967ec..702df9f 100644
+---- a/config.h.in
+-+++ b/config.h.in
+-@@ -180,7 +180,7 @@
+- #undef const
+- 
+- /* Define to rpl_fnmatch if the replacement function should be used. */
+--#undef fnmatch
+-+//#undef fnmatch
+- 
+- /* Define to `__inline__' or `__inline' if that's what the C compiler
+-    calls it, or to nothing if 'inline' is not supported under any name.  */
 diff --git a/package/batocera/utils/cabextract/cabextract.mk b/package/batocera/utils/cabextract/cabextract.mk
-index 05d69182..abb5d009 100644
+index 05d69182..1b8bff65 100644
 --- a/package/batocera/utils/cabextract/cabextract.mk
 +++ b/package/batocera/utils/cabextract/cabextract.mk
-@@ -4,12 +4,25 @@
+@@ -4,12 +4,30 @@
  #
  ################################################################################
  
@@ -44,13 +71,18 @@ index 05d69182..abb5d009 100644
 +# AM_ICONV in configure.ac comes from gettext's m4 files
 +CABEXTRACT_DEPENDENCIES = libmspack host-gettext
  CABEXTRACT_CONF_OPTS = --with-external-libmspack
- 
++# AC_REPLACE_FNMATCH cannot run its test when cross compiling and would
++# define fnmatch to its own rpl_fnmatch (what 001-fixfnmatch.patch undid in
++# config.h.in, a file that autoreconf now generates): the target's fnmatch
++# works.
++CABEXTRACT_CONF_ENV = ac_cv_func_fnmatch_works=yes
++
 +# There is no host-libmspack: the host tool (it unpacks the Xbox pad
 +# firmware .cab files at build time) uses the libmspack sources bundled
 +# in the same archive.
 +HOST_CABEXTRACT_DEPENDENCIES = host-gettext
 +HOST_CABEXTRACT_CONF_OPTS = --without-external-libmspack
-+
+ 
  $(eval $(autotools-package))
  $(eval $(host-autotools-package))
 -- 
