@@ -177,7 +177,7 @@ mainlog() { echo "${W}/build-${RF35H_STAGE:-1}.log"; }
 
 # Il log senza \r e codici di colore: col terminale (docker run -t) buildroot
 # mette ">>> pacchetto versione passo" tra due sequenze di escape.
-plain() { sed -u -e 's/\r$//' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b(B//g' "$@"; }
+plain() { sed -u -e 's/\r$//' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b(B//g'; }
 
 # pacchetti finiti / totali, e l'ultimo passo fatto (lo stamp piu' recente:
 # non serve leggere un log di GB)
@@ -214,16 +214,24 @@ short_progress() {	# "123/847 llvm-21.1.0 built, 80 GB, 42 min"
 	echo "${finished}/${total} ${last:-?}, $(gb "${W}") GB liberi, $(( ($(date +%s) - ${JOB_START:-$(date +%s)}) / 60 )) min"
 }
 
-# Il pacchetto fallito e le ultime righe utili del log
+# Il pacchetto fallito e le righe che servono a capire perche'. Le righe di
+# errore si cercano solo nella coda del log, e senza i falsi positivi delle
+# build precedenti (-Werror=..., fterrors.h): quelli di gcc, cargo/rustc,
+# make, meson, cmake e del sistema. Poi la coda del log senza le righe di
+# comando chilometriche. Tutto tagliato: e' il testo di un'annotazione.
 failure_report() {
 	local log pkg
 	log="$(mainlog)"
 	[ -f "${log}" ] || { echo "nessun log"; return 0; }
-	pkg="$(plain "${log}" | grep -aoE '/build/[^/ ]+/\.stamp_[a-z_]+\] Error' | tail -1 | sed -E 's|/build/([^/]+)/.*|\1|')"
+	pkg="$(tail -n 20000 "${log}" | plain | grep -aoE '/build/[^/ ]+/\.stamp_[a-z_]+\] Error' | tail -1 | sed -E 's|/build/([^/]+)/.*|\1|')"
 	echo "pacchetto: ${pkg:-sconosciuto}"
-	echo "ultimo passo: $(plain "${log}" | grep -a '^>>> ' | tail -1)"
-	echo "---"
-	plain "${log}" | grep -aiE 'error|fatal:|Illegal instruction|Killed|No space left|cannot|undefined reference|\*\*\*' | tail -25
+	echo "ultimo passo: $(tail -n 20000 "${log}" | plain | grep -a '^>>> ' | tail -1)"
+	echo "--- righe di errore"
+	tail -n 3000 "${log}" | plain \
+		| grep -aE '(^|[[:space:]])(error|ERROR|Error)(\[[A-Z0-9]+\])?:|^error|fatal( error)?:|\*\*\* |Killed|No space left|Illegal instruction|undefined reference|could not compile|failed to run|panicked at' \
+		| grep -avE -- '-W(no-)?error|supports arguments' | cut -c1-250 | tail -20
+	echo "--- coda del log"
+	tail -n 400 "${log}" | plain | awk 'length($0) < 600' | cut -c1-250 | tail -30
 }
 
 cmd_build() {
