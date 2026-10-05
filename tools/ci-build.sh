@@ -350,6 +350,19 @@ cmd_unpack() {
 			rm -rf "${d}"
 		fi
 	done
+	# Un pacchetto finito ma potato a cui rimanda un file di host/ (un .la
+	# di libtool con la sua cartella di build in dependency_libs): chi lo
+	# usa cercherebbe la' e fallirebbe (nfs-utils con util-linux). Lo stato
+	# puo' venire da una potatura che non lo sapeva: si rifa' da capo.
+	local name
+	while read -r name; do
+		d="${OUT}/build/${name}"
+		[ -f "${d}/.stamp_installed" ] || continue
+		if [ -z "$(find "${d}" -mindepth 1 -maxdepth 1 ! -name '.*' -print -quit)" ]; then
+			echo "  ${name}: potato ma richiesto da file di host/, da rifare"
+			rm -rf "${d}"
+		fi
+	done < <("$O/tools/prune-build.sh" -r "${OUT}")
 	echo "  $(progress)"
 }
 

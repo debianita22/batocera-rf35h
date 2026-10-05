@@ -170,10 +170,12 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
 - tra una parte e l'altra lo stato e' la cartella di buildroot e la ccache,
   senza sorgenti; prima di impacchettarlo `prune-build.sh` toglie gli
   oggetti dei pacchetti finiti (ne restano gli stamp, e make non li rifa').
-  Restano interi solo `linux` (i moduli esterni compilano contro il suo
-  albero), `alllinuxfirmwares` e `wireless-regdb` (li legge
-  `batocera-initramfs`): cercato nei `.mk` di Batocera e di buildroot, nessun
-  altro pacchetto legge la cartella di un altro;
+  Restano interi `linux` (i moduli esterni compilano contro il suo
+  albero), `python3` (target-finalize), `alllinuxfirmwares` e
+  `wireless-regdb` (li legge `batocera-initramfs`), e i pacchetti a cui
+  rimanda un file di `host/` (`.la`, `.pc`, `.cmake`, `*-config`: vedi
+  "Seconda build" sotto): cercato nei `.mk` di Batocera e di buildroot,
+  nessun altro pacchetto legge la cartella di un altro;
 - durante la build, sotto i 40 GB liberi, la stessa potatura ogni 5 minuti;
 - il pacchetto che la parte precedente stava costruendo (fermato con un kill:
   patch a meta', oggetti troncati che make crederebbe validi) si rifa' da capo
@@ -234,6 +236,30 @@ gzip) con un comando di estrazione proprio. Da proporre a Batocera a parte.
 Gli altri pacchetti Rust della build hanno tutti il loro `Cargo.lock`
 (dmd-play-rust, evsieve, libdovi, libretro-holani, logi-wheel; librsvg e' un
 tarball di rilascio GNOME).
+
+## Seconda build: nfs-utils e i .la di libtool (5/10/2026)
+
+La ripresa (run 37280076312) ha passato cargo-c e LLVM per l'host e si e'
+fermata dopo 4 ore al pacchetto 384 di 847, `nfs-utils`:
+
+    libtool: error: cannot find the library
+      '/rf35h/build/util-linux-2.41.4/libblkid.la'
+
+Questa volta e' colpa della CI. `libmount.la` nel sysroot ha in
+`dependency_libs` il percorso della cartella di build di util-linux (libtool
+lo scrive cosi' per le librerie dello stesso albero); buildroot sistema i
+percorsi `/usr` dei `.la`, non questi, e in una build normale nessuno se ne
+accorge perche' la cartella c'e' ancora. La potatura tra una parte e l'altra
+l'aveva tolta, e nfs-utils (che linka libmount) e' il primo che l'ha cercata.
+
+`prune-build.sh` ora legge i `.la`, `.pc`, `.cmake`, `.prl` e `*-config` di
+`host/` (sysroot compreso), prende i nomi dopo `/build/` e lascia interi
+quei pacchetti (`-r` li elenca). `unpack` fa lo stesso controllo sullo stato
+che riceve: un pacchetto richiesto ma gia' potato (lo stato viene da una
+potatura che non lo sapeva) viene tolto e si rifa', cosi' la ripresa da
+37280076312 si cura da sola, senza indovinare `rebuild`. `test-ci-build.sh`
+21/21, coi tre casi nuovi (util-linux intero, un `.pc` innocuo non lo
+tiene, stato vecchio curato da unpack); con la potatura di prima falliscono.
 
 ## Revisione indipendente (5/10/2026)
 
@@ -317,7 +343,7 @@ fallisce.
 
 Stato dei test (tutti in `ci-check.sh`, quindi a ogni push e prima di ogni
 build): `test-upgrade` 12, `test-verify-image` 26 (l'immagine giusta e 25
-mutazioni), `test-ci-build` 20, `test-image-step` 9.
+mutazioni), `test-ci-build` 21, `test-image-step` 9.
 
 Cercati anche, nei .mk degli 847 pacchetti, scaricamenti fuori dalla fase di
 download (che, come `cargo-c`, prenderebbero l'ultima versione di qualcosa):
@@ -344,7 +370,7 @@ altro rischio di quel tipo.
   partizioni, console, FDT, boot.scr, board, DTB, moduli, firmware, alias di
   rk915, es_input, URL, versione, core, profilo snello nei due squashfs,
   md5, loader SPI) tutte rilevate.
-- `test-ci-build.sh` 18/18: stato tra una parte e l'altra (pacchetti finiti
+- `test-ci-build.sh` 18/18 (poi 21): stato tra una parte e l'altra (pacchetti finiti
   potati con gli stamp, `linux` intero, i pacchetti interrotti tolti, ccache
   e digest del container portati), `rebuild`, `collect`/`verdict` con
   un'immagine giusta e una rotta. Ha trovato un errore vero: con nessun

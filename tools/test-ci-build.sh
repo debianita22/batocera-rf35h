@@ -9,7 +9,10 @@
 #   pack + unpack   lo stato passa da una parte all'altra: i pacchetti finiti
 #                   potati (restano gli stamp), linux intero, il pacchetto
 #                   interrotto tolto (si rifa' da capo), ccache e digest del
-#                   container portati
+#                   container portati; intero anche il pacchetto a cui
+#                   rimanda un .la di libtool del sysroot (util-linux), e se
+#                   uno stato vecchio lo porta gia' potato, unpack lo toglie
+#                   perche' si rifaccia
 #   rebuild         RF35H_REBUILD toglie la cartella build/<nome>-<versione>;
 #                   un nome che non e' un pacchetto ferma tutto
 #   collect         con DTB (rk3326-xifan-rf35h.dtb compilato): un'immagine
@@ -48,11 +51,19 @@ fake_tree() {
 	pkg bar-2.0 downloaded extracted patched configured
 	pkg qux-0.1 downloaded extracted
 	pkg configgen-local rsynced configured built
+	pkg util-linux-2.41.4 "${all[@]}"
+	pkg libpcap-1.10.6 "${all[@]}"
 	mkdir -p "$b/buildroot-config"; echo conf > "$b/buildroot-config/auto.conf"
+	# il sysroot: libmount.la rimanda alla cartella di build di util-linux
+	# (col percorso che ha dentro al container), un .pc no
+	local sr="$T/w/work/output/rf35h/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib"
+	mkdir -p "$sr/pkgconfig"
+	printf "# libtool\ndependency_libs=' /rf35h/build/util-linux-2.41.4/libblkid.la -lrt'\nlibdir='%s'\n" "$sr" > "$sr/libmount.la"
+	printf 'prefix=/usr\nLibs: -L${libdir} -lpcap\n' > "$sr/pkgconfig/libpcap.pc"
 	mkdir -p "$T/w/work/output/rf35h/host/bin"; echo gcc > "$T/w/work/output/rf35h/host/bin/gcc"
 	echo cache > "$T/w/work/ccache/entry"
 	echo "batoceralinux/batocera.linux-build@sha256:0123" > "$T/w/work/container.txt"
-	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" > "$T/w/packages.txt"
+	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" "util-linux 2.41.4" "libpcap 1.10.6" > "$T/w/packages.txt"
 }
 
 echo "==> pack e unpack"
@@ -70,6 +81,8 @@ b="$T/w/work/output/rf35h/build"
 [ -f "$b/linux-7.2.8/src/a.o" ] && [ -f "$b/linux-7.2.8/Makefile" ] && ok "linux intero" || bad "linux potato"
 [ -f "$b/python3-3.14.5/src/a.o" ] && ok "python3 intero (compileall.py in target-finalize, _PYTHON_PROJECT_BASE)" || bad "python3 potato"
 [ ! -e "$b/linux-headers-7.2.8/src" ] && [ ! -e "$b/python3-configobj-5.0.8/src" ] && ok "linux-headers e python3-configobj potati (nome esatto)" || bad "linux-headers o python3-configobj tenuti interi"
+[ -f "$b/util-linux-2.41.4/src/a.o" ] && ok "util-linux intero (libmount.la del sysroot rimanda alla sua cartella di build)" || bad "util-linux potato"
+[ ! -e "$b/libpcap-1.10.6/src" ] && ok "libpcap potato (il suo .pc non rimanda a build/)" || bad "libpcap tenuto intero"
 [ ! -e "$b/bar-2.0" ] && ok "pacchetto interrotto (configurato, non finito) tolto" || bad "bar-2.0 ancora li'"
 [ ! -e "$b/qux-0.1" ] && ok "pacchetto interrotto (estratto) tolto" || bad "qux-0.1 ancora li'"
 [ ! -e "$b/configgen-local" ] && ok "pacchetto locale interrotto (rsync) tolto" || bad "configgen-local ancora li'"
@@ -78,6 +91,16 @@ b="$T/w/work/output/rf35h/build"
 [ "$(cat "$T/w/work/container.txt" 2>/dev/null)" = "batoceralinux/batocera.linux-build@sha256:0123" ] && ok "digest del container portato" || bad "container.txt"
 [ -f "$T/w/work/output/rf35h/host/bin/gcc" ] && ok "host/ portato" || bad "host/"
 [ ! -e "$T/w/dl-state/state-1.tar.zst" ] && ok "tarball dello stato tolto dopo l'estrazione" || bad "tarball rimasto"
+
+echo "==> stato vecchio: pacchetto richiesto gia' potato"
+fake_tree
+rm -rf "$b/util-linux-2.41.4/src" "$b/util-linux-2.41.4/Makefile"	# potato da una CI che non guardava i .la
+[ "$(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h")" = "util-linux-2.41.4" ] && ok "prune-build.sh -r elenca util-linux-2.41.4" || bad "prune-build.sh -r: $(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h" | tr '\n' ' ')"
+mkdir -p "$T/w/dl-state"; (cd "$T/w/work" && tar -cf - output ccache container.txt | zstd -q -3 > "$T/w/dl-state/state-1.tar.zst")
+rm -rf "$T/w/work"
+ci "$O/tools/ci-build.sh" unpack 1 > "$T/unpack2.log" 2>&1 || { cat "$T/unpack2.log"; exit 1; }
+[ ! -e "$b/util-linux-2.41.4" ] && grep -q "util-linux-2.41.4: potato ma richiesto" "$T/unpack2.log" && ok "unpack toglie util-linux potato perche' si rifaccia" || { bad "unpack: util-linux potato lasciato li'"; sed 's/^/      /' "$T/unpack2.log"; }
+[ -f "$b/foo-1.0/.stamp_installed" ] && ok "gli altri pacchetti potati restano" || bad "foo-1.0 tolto"
 
 echo "==> rebuild"
 fake_tree
