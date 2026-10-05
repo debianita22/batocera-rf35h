@@ -1,7 +1,7 @@
 From 47382a80fe9835c6b08933b236e9aa5d52b75142 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 09:45:47 +0200
-Subject: [PATCH 5/5] cargo-c: build from the crates.io release and its
+Subject: [PATCH 5/6] cargo-c: build from the crates.io release and its
  Cargo.lock
 
 Not RF35H-specific: worth sending to batocera.linux on its own.

@@ -1,7 +1,7 @@
 From fc0646452297fb10e139bdc2e0e5fc1899c30b1e Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 16:03:41 +0200
-Subject: [PATCH 3/5] rf35h: target and image for the XiFan RF35H
+Subject: [PATCH 3/6] rf35h: target and image for the XiFan RF35H
 
 batocera-rf35h only. configs/batocera-rf35h.board is the RK3326 board
 with two images from the same system:

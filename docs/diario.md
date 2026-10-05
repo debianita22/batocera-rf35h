@@ -261,6 +261,25 @@ potatura che non lo sapeva) viene tolto e si rifa', cosi' la ripresa da
 21/21, coi tre casi nuovi (util-linux intero, un `.pc` innocuo non lo
 tiene, stato vecchio curato da unpack); con la potatura di prima falliscono.
 
+## Terza build: cabextract.org.uk irraggiungibile (5/10/2026)
+
+La ripresa (run 37318724030) e' andata da 360 a 555 pacchetti in tre ore e si
+e' fermata su `host-cabextract`, allo scaricamento: `www.cabextract.org.uk`
+non rispondeva dal runner (timeout su tutti gli indirizzi) e il mirror di
+buildroot non ha quel file (cabextract e' un pacchetto di Batocera, non di
+buildroot). Due tentativi uguali. Non c'entrano ne' l'RF35H ne' la CI: un
+sito solo, senza mirror, per un pacchetto che serve ai driver dei pad Xbox
+(xone, xow, xpadneo, hid-nx, xpad-noone lo usano per i firmware).
+
+`fork/0006`: gli stessi sorgenti sono la cartella `cabextract/` del
+repository `kyz/libmspack` su GitHub, tag `v1.11` (i `mspack/*` sono link a
+`../libmspack`, quindi archivio intero e `CABEXTRACT_SUBDIR`); l'albero git
+non ha `configure`, quindi `AUTORECONF = YES` con `host-gettext` per
+`AM_ICONV`. Provato qui: `autoreconf -i`, `configure
+--with-external-libmspack`, `make` -> `cabextract version 1.11` linkato a
+libmspack. libmspack invece e' un pacchetto di buildroot, col suo hash e la
+copia sul mirror, ed era gia' costruito. Anche questo da proporre a Batocera.
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e

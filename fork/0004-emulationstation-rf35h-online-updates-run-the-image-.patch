@@ -1,7 +1,7 @@
 From 4b893a3a8b182ee39f29f82a5cb75bc7667bdb8e Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 03:36:17 +0200
-Subject: [PATCH 4/5] emulationstation: rf35h online updates run the image's
+Subject: [PATCH 4/6] emulationstation: rf35h online updates run the image's
  batocera-upgrade
 
 batocera-rf35h only. For an online update, EmulationStation downloads

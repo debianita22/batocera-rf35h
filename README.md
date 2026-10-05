@@ -14,7 +14,7 @@ two patch series on top of it:
 | Series | What | Where it should end up |
 |---|---|---|
 | `upstream/` | RF35H support: device tree, rumble motor on a GPIO for `rocknix-joypad`, the gamepad mapping, the RF35H in Batocera's `mainline` RK3326 image, `rk915` loaded from its device tree node | a pull request to [batocera.linux](https://github.com/batocera-linux/batocera.linux) |
-| `fork/` | what stays here: the `rf35h` target and image (the loader the RF35H is known to boot with), updates from this repository's releases, a leaner package set | here |
+| `fork/` | what stays here: the `rf35h` target and image (the loader the RF35H is known to boot with), updates from this repository's releases, a leaner package set; plus two build fixes that are not RF35H-specific (cargo-c's Cargo.lock, cabextract's download site), to be proposed to Batocera separately | here |
 
 ## The device
 
