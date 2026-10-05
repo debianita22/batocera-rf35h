@@ -42,6 +42,9 @@ fake_tree() {
 	pkg foo-1.0 "${all[@]}"
 	pkg host-baz-3 downloaded extracted patched configured built host_installed installed
 	pkg linux-7.2.8 "${all[@]}"
+	pkg python3-3.14.5 "${all[@]}"
+	pkg linux-headers-7.2.8 "${all[@]}"
+	pkg python3-configobj-5.0.8 "${all[@]}"
 	pkg bar-2.0 downloaded extracted patched configured
 	pkg qux-0.1 downloaded extracted
 	pkg configgen-local rsynced configured built
@@ -49,7 +52,7 @@ fake_tree() {
 	mkdir -p "$T/w/work/output/rf35h/host/bin"; echo gcc > "$T/w/work/output/rf35h/host/bin/gcc"
 	echo cache > "$T/w/work/ccache/entry"
 	echo "batoceralinux/batocera.linux-build@sha256:0123" > "$T/w/work/container.txt"
-	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "qux 0.1" "configgen local" > "$T/w/packages.txt"
+	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" > "$T/w/packages.txt"
 }
 
 echo "==> pack e unpack"
@@ -65,6 +68,8 @@ b="$T/w/work/output/rf35h/build"
 	&& ok "pacchetto finito potato, stamp e .files-list tenuti" || bad "foo-1.0: $(ls -A "$b/foo-1.0" 2>&1 | tr '\n' ' ')"
 [ -f "$b/host-baz-3/.stamp_installed" ] && [ ! -e "$b/host-baz-3/src" ] && ok "pacchetto per l'host potato" || bad "host-baz-3"
 [ -f "$b/linux-7.2.8/src/a.o" ] && [ -f "$b/linux-7.2.8/Makefile" ] && ok "linux intero" || bad "linux potato"
+[ -f "$b/python3-3.14.5/src/a.o" ] && ok "python3 intero (compileall.py in target-finalize, _PYTHON_PROJECT_BASE)" || bad "python3 potato"
+[ ! -e "$b/linux-headers-7.2.8/src" ] && [ ! -e "$b/python3-configobj-5.0.8/src" ] && ok "linux-headers e python3-configobj potati (nome esatto)" || bad "linux-headers o python3-configobj tenuti interi"
 [ ! -e "$b/bar-2.0" ] && ok "pacchetto interrotto (configurato, non finito) tolto" || bad "bar-2.0 ancora li'"
 [ ! -e "$b/qux-0.1" ] && ok "pacchetto interrotto (estratto) tolto" || bad "qux-0.1 ancora li'"
 [ ! -e "$b/configgen-local" ] && ok "pacchetto locale interrotto (rsync) tolto" || bad "configgen-local ancora li'"

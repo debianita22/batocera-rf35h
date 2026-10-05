@@ -1,0 +1,70 @@
+From 4b893a3a8b182ee39f29f82a5cb75bc7667bdb8e Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Mon, 5 Oct 2026 03:36:17 +0200
+Subject: [PATCH 4/4] emulationstation: rf35h online updates run the image's
+ batocera-upgrade
+
+batocera-rf35h only. For an online update, EmulationStation downloads
+batocera-upgrade from batocera.linux master on GitHub and runs that one
+(ApiSystem::updateSystem), falling back to the installed script only if
+the download fails. Upstream's script knows nothing of the rf35h board
+and of the GitHub releases batocera-rf35h updates from: the check (which
+runs the installed script) would offer an update, and installing it
+would fail on updates.batocera.org/rf35h/... The patch drops the
+download: online updates use the installed script, as media updates do.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ .../005-rf35h-builtin-upgrade-script.patch    | 38 +++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+ create mode 100644 package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch
+
+diff --git a/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch b/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch
+new file mode 100644
+index 0000000..3174048
+--- /dev/null
++++ b/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch
+@@ -0,0 +1,38 @@
++diff --git a/es-app/src/ApiSystem.cpp b/es-app/src/ApiSystem.cpp
++index 416a466..1ecd8a9 100644
++--- a/es-app/src/ApiSystem.cpp
+++++ b/es-app/src/ApiSystem.cpp
++@@ -252,30 +252,11 @@ std::pair<std::string, int> ApiSystem::updateSystem(const std::function<void(con
++ {
++ 	LOG(LogDebug) << "ApiSystem::updateSystem";
++ 
+++	// batocera-rf35h: always the batocera-upgrade of this image. Upstream's
+++	// script from GitHub master knows nothing of the rf35h board and of the
+++	// GitHub releases it updates from.
++ 	std::string upgradeScriptPath = "batocera-upgrade";
++ 
++-	// Fetch the latest script from GitHub if performing an online upgrade
++-	if (!fromlocalmedia)
++-	{
++-		if (func != nullptr)
++-			func(_("Checking for latest upgrade script..."));
++-
++-		std::string downloadCommand = "curl --connect-timeout 10 -m 30 -L -f -s -o /tmp/batocera-upgrade "
++-		                              "https://github.com/batocera-linux/batocera.linux/raw/refs/heads/master/package/batocera/core/batocera-scripts/scripts/batocera-upgrade "
++-		                              "&& chmod +x /tmp/batocera-upgrade";
++-		
++-		int downloadRes = system(downloadCommand.c_str());
++-		if (downloadRes == 0 && Utils::FileSystem::exists("/tmp/batocera-upgrade"))
++-		{
++-			LOG(LogInfo) << "Successfully fetched the latest batocera-upgrade script from GitHub.";
++-			upgradeScriptPath = "/tmp/batocera-upgrade";
++-		}
++-		else
++-		{
++-			LOG(LogWarning) << "Failed to fetch latest upgrade script from GitHub, falling back to built-in version.";
++-		}
++-	}
++-
++ 	std::string updatecommand = upgradeScriptPath + " --upgrade";
++ 	if (fromlocalmedia) {
++ 		updatecommand = upgradeScriptPath + " --media-upgrade --media";
+-- 
+2.43.0
+

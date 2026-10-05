@@ -13,13 +13,20 @@
 # alla radice della cartella (.files-list*): make vede gli stamp e non lo
 # ricostruisce, come se la cartella fosse intatta.
 #
-# Restano intere le cartelle che altri pacchetti leggono anche dopo:
+# Restano intere le cartelle che si leggono anche dopo l'installazione:
 #   linux                 i moduli esterni compilano contro il suo albero
-#                         (rk915, rocknix-joypad, ...)
+#                         (rk915, rocknix-joypad, ...), e target-finalize
+#                         ne chiede la versione (LINUX_RUN_DEPMOD)
+#   python3               target-finalize compila i .pyc con il suo
+#                         Lib/compileall.py (BR2_PACKAGE_PYTHON3_PY_PYC), e
+#                         i pacchetti python con estensioni C lo usano come
+#                         _PYTHON_PROJECT_BASE (senza, si compilerebbero con
+#                         gli header di python dell'host)
 #   alllinuxfirmwares     batocera-initramfs ne copia i firmware
 #   wireless-regdb        batocera-initramfs ne copia il database
-# (cercato nei .mk di Batocera e di buildroot: nessun altro pacchetto legge la
-# cartella di un altro). Un pacchetto non finito non si tocca mai.
+# Cercato nei .mk di Batocera e di buildroot, infrastruttura e hook di
+# target-finalize compresi: nient'altro legge una cartella di build dopo
+# l'installazione. Un pacchetto non finito non si tocca mai.
 #
 # Serve alla CI: lo stato passato da una parte all'altra e' molto piu' piccolo,
 # e il disco del runner non si riempie. Si puo' usare anche a mano; un
@@ -32,7 +39,8 @@ OUT="${1:?uso: prune-build.sh [-n] OUTPUT}"
 BUILD="$OUT/build"
 [ -d "$BUILD" ] || { echo "prune: $BUILD non esiste" >&2; exit 1; }
 
-KEEP_RE='^(linux|alllinuxfirmwares|wireless-regdb)-'
+# nome-versione esatto: linux-headers, linux-pam, python3-configobj non c'entrano
+KEEP_RE='^(linux|python3|alllinuxfirmwares|wireless-regdb)-[0-9][0-9.]*$'
 
 n=0; skipped=0
 before=$(du -sk "$BUILD" 2>/dev/null | cut -f1)

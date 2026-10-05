@@ -113,6 +113,12 @@ jobs:
           case "${version}" in
             ''|*[!A-Za-z0-9._+-]*) echo "::error::versione '${version}': solo lettere, cifre e . _ + -"; exit 1 ;;
           esac
+          # batocera.version e' "44-dev-rf35h-<versione> AAAA/MM/GG hh:mm", ed
+          # EmulationStation scarta una versione di 49 caratteri o piu'
+          if [ "${#version}" -gt 18 ]; then
+            echo "::error::versione '${version}': al massimo 18 caratteri"
+            exit 1
+          fi
           if [ "${publish}" = true ] && gh release view "${version}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "::error::la release ${version} esiste gia'"
             exit 1
@@ -241,7 +247,7 @@ jobs:
           cd dist
           sha256sum -c SHA256SUMS
           [ "$(cat boot.tar.xz.md5)" = "$(md5sum boot.tar.xz | cut -d' ' -f1)" ]
-          grep -q "\.rf35h-${VERSION} " batocera.version
+          grep -q -- "-rf35h-${VERSION} " batocera.version
           tail -1 verify-image.txt | grep -qx Conforme
           ls -la
 

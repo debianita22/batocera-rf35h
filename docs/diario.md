@@ -207,6 +207,60 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   da rifare da capo, quelli il cui `.mk` o le cui patch sono cambiati
   (buildroot non se ne accorge da solo).
 
+## Revisione indipendente (5/10/2026)
+
+Un agente che non aveva visto il lavoro ha controllato serie, script e
+workflow sui sorgenti. Due difetti veri, entrambi corretti:
+
+- **La potatura toglieva `python3`.** Con `BR2_PACKAGE_PYTHON3_PY_PYC=y`
+  (in `batocera-board.common`) target-finalize compila i `.pyc` con
+  `$(PYTHON3_DIR)/Lib/compileall.py`, e i pacchetti python con estensioni C
+  hanno `_PYTHON_PROJECT_BASE=$(PYTHON3_DIR)`: senza quella cartella si
+  compilerebbero con gli header dell'host, senza errori. python3 e' il
+  pacchetto 77 di 847: la fine della parte 1 l'avrebbe potato, e la build
+  sarebbe fallita in target-finalize dopo una trentina d'ore. Il mio scan
+  dei `.mk` escludeva i riferimenti di un pacchetto alla propria cartella;
+  rifatto su tutti gli hook di target-finalize e rootfs: solo `python3` e
+  `linux`. La regola ora vuole il nome esatto (`linux-7.2.8`, non
+  `linux-headers-7.2.8` ne' `python3-configobj-*`). La build in corso (196
+  pacchetti su 847 in 83 minuti) e' stata fermata; la ccache resta.
+- **"Aggiorna" in EmulationStation non usava il nostro `batocera-upgrade`.**
+  ES (`ApiSystem::updateSystem`) per un aggiornamento dalla rete scarica lo
+  script dal master di batocera.linux su GitHub e lancia quello; il
+  controllo invece usa lo script installato. Risultato: aggiornamento
+  proposto, installazione fallita su `updates.batocera.org/rf35h/...`.
+  `fork/0004` toglie lo scaricamento (verificato che la serie di patch di ES
+  applica nell'ordine di buildroot); `verify-image.sh` controlla che il
+  binario non contenga piu' quell'URL. `test-upgrade.sh` chiamava lo script
+  direttamente, per questo non se n'era accorto.
+
+E due minori:
+
+- **Lunghezza della versione.** ES scarta una `batocera.version` di 49
+  caratteri o piu'. Il formato `44-dev-3b66740.rf35h-<V> data` lasciava 10
+  caratteri a V; ora e' `44-dev-rf35h-<V> data` (il commit di Batocera lo
+  dice `batocera.pin`), V fino a 18, controllato da `build.yml` e
+  `build.sh`, e dai due lati del limite in `test-upgrade.sh`. Quando
+  Batocera uscira' dalla `-dev`, `batocera-system.mk` non mettera' piu'
+  `BATOCERA_GIT_COMMIT` nella versione: `verify-image.sh` se ne accorgerebbe
+  (`-rf35h-`), e servira' una patch in `fork/`.
+- Una build di prova ripresa da un run fallito tiene la versione del primo
+  run (`batocera-system` non si ricostruisce): solo per le prove, le
+  release partono da zero.
+
+Segnalato ma non vero: "il loader AURKNIX non imposta `hwid_adc`". Nel
+binario c'e', accanto a "Read SARADC failed" e "board_name": e' lo stesso
+codice della patch `0002-odroid-go2-hwid-adc` di Batocera.
+
+Rischio che resta, non verificabile senza la console: il riconoscimento
+della scheda SDIO del Wi-Fi. Senza `non-removable`, `cd-gpios` e
+`broken-cd`, dw_mmc legge il registro CDETECT; se dice "assente",
+`mmc_rescan` non enumera il chip neanche dopo che il driver l'ha acceso.
+`non-removable` non si puo' usare (con quello `mmc_rescan` gira una volta
+sola, prima che il driver accenda il chip). La R36 Ultra di Batocera ha lo
+stesso nodo e il driver dice di funzionare. Se sull'RF35H il Wi-Fi non
+compare: `broken-cd` in `&sdio` (polling ogni secondo) e' la prima prova.
+
 ## Verificato (host x86_64, 4/10/2026)
 
 - `tools/ci-check.sh` intero, 131 s: script (shellcheck, actionlint),

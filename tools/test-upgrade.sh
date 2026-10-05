@@ -120,23 +120,31 @@ console() {	# lo stato della console prima di ogni prova
 	echo rf35h > "$SB/boot/boot/batocera.board"
 	echo "system old" > "$SB/boot/boot/batocera"
 	echo kernel-old > "$SB/boot/linux"
-	echo "44-dev-3b66740.rf35h-v1.0.0 2026/10/04 18:00" > "$SB/usr/share/batocera/batocera.version"
+	echo "44-dev-rf35h-v1.0.0 2026/10/04 18:00" > "$SB/usr/share/batocera/batocera.version"
 }
 run() { PATH="$BIN:$PATH" "$W/batocera-upgrade" "$@" > "$W/out.log" 2>&1 < /dev/null; }
 
 echo "==> controllo dell'aggiornamento (come EmulationStation)"
-console; release rf35h "44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00"
+console; release rf35h "44-dev-rf35h-v1.0.1 2026/10/10 12:00"
 rc=0; run --check-upgrade || rc=$?
-if [ "$rc" = 0 ] && grep -qx "44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00" "$W/out.log"; then ok "versione nuova: la stampa, esce 0"; else bad "versione nuova: esce $rc"; sed 's/^/      /' "$W/out.log"; fi
+if [ "$rc" = 0 ] && grep -qx "44-dev-rf35h-v1.0.1 2026/10/10 12:00" "$W/out.log"; then ok "versione nuova: la stampa, esce 0"; else bad "versione nuova: esce $rc"; sed 's/^/      /' "$W/out.log"; fi
 if grep -qx "wget $URL/batocera.version" "$LOG"; then ok "chiede $URL/batocera.version"; else bad "URL del controllo:"; sed 's/^/      /' "$LOG"; fi
-console; release rf35h "44-dev-3b66740.rf35h-v1.0.0 2026/10/04 18:00"
+console; release rf35h "44-dev-rf35h-v1.0.0 2026/10/04 18:00"
 rc=0; run --check-upgrade || rc=$?
 if [ "$rc" = 12 ]; then ok "stessa versione: esce 12"; else bad "stessa versione: esce $rc"; fi
+# il limite di build.yml e build.sh (18 caratteri di versione) contro quello
+# dello script: EmulationStation scarta una batocera.version di 49 o piu'
+console; release rf35h "44-dev-rf35h-$(printf 'x%.0s' $(seq 18)) 2026/10/10 12:00"
+rc=0; run --check-upgrade || rc=$?
+if [ "$rc" = 0 ]; then ok "versione di 18 caratteri (48 in tutto): proposta"; else bad "versione di 18 caratteri: esce $rc"; fi
+console; release rf35h "44-dev-rf35h-$(printf 'x%.0s' $(seq 19)) 2026/10/10 12:00"
+rc=0; run --check-upgrade || rc=$?
+if [ "$rc" = 2 ]; then ok "versione di 19 caratteri (49 in tutto): scartata, come dice build.yml"; else bad "versione di 19 caratteri: esce $rc (il limite di 18 non e' piu' quello giusto)"; fi
 
 echo "==> aggiornamento"
-console; release rf35h "44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00"
+console; release rf35h "44-dev-rf35h-v1.0.1 2026/10/10 12:00"
 rc=0; run --upgrade || rc=$?
-if [ "$rc" = 0 ] && grep -qx "system 44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00" "$SB/boot/boot/batocera.update" \
+if [ "$rc" = 0 ] && grep -qx "system 44-dev-rf35h-v1.0.1 2026/10/10 12:00" "$SB/boot/boot/batocera.update" \
    && grep -qx kernel-new "$SB/boot/linux"; then
 	ok "boot.tar.xz scaricato, verificato ed estratto in /boot"
 else
@@ -144,7 +152,7 @@ else
 fi
 if grep -qx "curl $URL/boot.tar.xz" "$LOG" && grep -qx "curl $URL/boot.tar.xz.md5" "$LOG"; then ok "file presi dalla radice della release"; else bad "URL dello scaricamento:"; sed 's/^/      /' "$LOG"; fi
 
-console; release rk3326 "44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00"
+console; release rk3326 "44-dev-rf35h-v1.0.1 2026/10/10 12:00"
 rc=0; run --upgrade || rc=$?
 if [ "$rc" != 0 ] && [ ! -e "$SB/boot/boot/batocera.update" ] && grep -qx kernel-old "$SB/boot/linux"; then
 	ok "archivio di un'altra board (rk3326): rifiutato, /boot intatto"
@@ -152,7 +160,7 @@ else
 	bad "archivio di un'altra board: esce $rc"; sed 's/^/      /' "$W/out.log"
 fi
 
-console; release rf35h "44-dev-3b66740.rf35h-v1.0.1 2026/10/10 12:00"; echo 0123 > "$SRV/boot.tar.xz.md5"
+console; release rf35h "44-dev-rf35h-v1.0.1 2026/10/10 12:00"; echo 0123 > "$SRV/boot.tar.xz.md5"
 rc=0; run --upgrade || rc=$?
 if [ "$rc" != 0 ] && [ ! -e "$SB/boot/boot/batocera.update" ]; then ok "md5 sbagliata: rifiutato, /boot intatto"; else bad "md5 sbagliata: esce $rc"; fi
 

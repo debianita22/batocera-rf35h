@@ -19,7 +19,8 @@
 #             mette nel secondo usr/lib/libretro e usr/bin/mame, e l'initrd li
 #             monta insieme): i moduli rk915 e rocknix-singleadc-joypad, con
 #             la patch del motore; i firmware RK915; l'alias che carica rk915;
-#             il pad in es_input.cfg; batocera-upgrade verso le release; i core
+#             il pad in es_input.cfg; batocera-upgrade verso le release, ed
+#             EmulationStation che non lo riscarica da GitHub; i core
 #             libretro principali; niente Kodi, MAME attuale, Moonlight
 #             (profilo snello)
 #   update    boot.tar.xz con lo stesso sistema, la sua .md5, batocera.version
@@ -118,11 +119,15 @@ else
 fi
 chk "es_input.cfg: XiFan RF35H Gamepad, hotkey Select" \
 	bash -c 'cat_in() { unsquashfs -cat "$1" "$2" 2>/dev/null; }; cfg="$(cat_in "$1" /usr/share/emulationstation/es_input.cfg)"; blk="$(sed -n "/deviceName=\"XiFan RF35H Gamepad\" deviceGUID=\"190000004b4800003511000000010000\"/,/<\/inputConfig>/p" <<<"$cfg")"; grep -q "name=\"hotkey\" type=\"button\" id=\"8\" value=\"1\" code=\"314\"" <<<"$blk"' _ "$SQ"
+cat_sq /usr/bin/emulationstation > "$TMP/es.bin"
+chk "emulationstation: gli aggiornamenti usano il batocera-upgrade dell'immagine (fork/0004)" \
+	bash -c '[ -s "$1" ] && ! grep -qa "batocera.linux/raw/refs/heads/master/package/batocera/core/batocera-scripts/scripts/batocera-upgrade" "$1"' _ "$TMP/es.bin"
 UPG="$(cat_sq /usr/bin/batocera-upgrade)"
 chk "batocera-upgrade: aggiornamenti dalle release GitHub" grep -qE '^G_UPDATEURL="https://github\.com/[^/]+/[^/]+/releases/latest/download"$' <<<"$UPG"
 chk "batocera-upgrade: controllo della board anche dalla rete" grep -q 'the URL no longer names the board' <<<"$UPG"
 VER="$(cat_sq /usr/share/batocera/batocera.version)"
-chk "batocera.version col nome rf35h ($VER)" grep -q '\.rf35h-' <<<"$VER"
+chk "batocera.version col nome rf35h ($VER)" grep -q -- '-rf35h-' <<<"$VER"
+chk "batocera.version al massimo 48 caratteri (${#VER}: EmulationStation scarta le piu' lunghe)" test "${#VER}" -le 48
 NCORES="$(grep -cE '/usr/lib/libretro/[^/]+_libretro\.so$' "$LIST")"
 chk "core libretro: $NCORES, con gambatte, snes9x, mgba, fbneo, mame078plus, pcsx_rearmed, flycastvl" \
 	bash -c 'for c in gambatte snes9x mgba fbneo mame078plus pcsx_rearmed flycastvl; do grep -qE "/usr/lib/libretro/${c}_libretro\.so$" "$1" || exit 1; done' _ "$LIST"

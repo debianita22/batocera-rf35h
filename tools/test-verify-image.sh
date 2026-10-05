@@ -27,7 +27,7 @@ trap 'rm -rf "$W"' EXIT
 export MTOOLS_SKIP_CHECK=1
 
 RF="$TREE/board/batocera/rockchip/rk3326/rf35h"
-VER="44-dev-3b66740.rf35h-test 2026/10/04 18:00"
+VER="44-dev-rf35h-test 2026/10/04 18:00"
 
 # $1: cartella di lavoro; $2: la mutazione da fare (vuota: nessuna)
 make_image() {
@@ -45,6 +45,7 @@ make_image() {
 	cp "$TREE/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf" "$r/etc/modprobe.d/"
 	cp "$TREE/package/batocera/emulationstation/batocera-emulationstation/controllers/es_input.cfg" "$r/usr/share/emulationstation/"
 	cp "$TREE/package/batocera/core/batocera-scripts/scripts/batocera-upgrade" "$r/usr/bin/"
+	printf 'ELF\0updateSystem\0Checking for updates\0' > "$r/usr/bin/emulationstation"
 	echo "$VER" > "$r/usr/share/batocera/batocera.version"
 	local c
 	for c in gambatte snes9x mgba fbneo mame078plus pcsx_rearmed flycastvl melonds; do
@@ -56,6 +57,8 @@ make_image() {
 		es-hotkey-mode)   sed -i '/deviceName="XiFan RF35H Gamepad"/,/<\/inputConfig>/ s|<input name="hotkey" type="button" id="8" value="1" code="314" />|<input name="hotkey" type="button" id="10" value="1" code="316" />|' "$r/usr/share/emulationstation/es_input.cfg" ;;
 		upgrade-official) sed -i 's|^G_UPDATEURL=.*|G_UPDATEURL="https://updates.batocera.org"|' "$r/usr/bin/batocera-upgrade" ;;
 		version-plain)    echo "44-dev-3b66740 2026/10/04 18:00" > "$r/usr/share/batocera/batocera.version" ;;
+		es-fetches-upgrade) printf '\0https://github.com/batocera-linux/batocera.linux/raw/refs/heads/master/package/batocera/core/batocera-scripts/scripts/batocera-upgrade \0' >> "$r/usr/bin/emulationstation" ;;
+		version-long)     echo "44-dev-rf35h-abcdefghijklmnopqrs 2026/10/04 18:00" > "$r/usr/share/batocera/batocera.version" ;;
 		not-slim)         mkdir -p "$u/usr/bin/mame" && echo x > "$u/usr/bin/mame/mame" ;;
 		not-slim-core)    echo core > "$u/usr/lib/libretro/mame_libretro.so" ;;
 		not-slim-kodi)    mkdir -p "$r/usr/lib/kodi" && echo x > "$r/usr/lib/kodi/kodi.bin" ;;
@@ -141,7 +144,7 @@ fi
 echo "==> mutazioni (ognuna deve dare NON conforme)"
 for m in loader-flip fat-at-8m not-bootable console-ttys2 fdt-other scr-low-kernel board-other \
          dtb-old-joypad dtb-no-rumble dtb-58hz joypad-unpatched no-rk915-fw es-hotkey-mode \
-         upgrade-official version-plain not-slim not-slim-core not-slim-kodi no-core-fbneo \
+         upgrade-official es-fetches-upgrade version-plain version-long not-slim not-slim-core not-slim-kodi no-core-fbneo \
          no-rk915-alias no-rufo-update md5-wrong spi-loader; do
 	make_image "$W/$m" "$m"
 	if run_verify "$W/$m"; then

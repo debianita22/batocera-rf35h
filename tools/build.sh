@@ -19,9 +19,12 @@
 # rf35h-build): la CI lo ferma con docker kill.
 #
 # La versione e' quella di Batocera piu' la nostra:
-#     44-dev-<commit di Batocera>.rf35h-<V> AAAA/MM/GG hh:mm
+#     44-dev-rf35h-<V> AAAA/MM/GG hh:mm
 # ed e' cio' che le console confrontano con batocera.version dell'ultima
-# release per proporre l'aggiornamento.
+# release per proporre l'aggiornamento. EmulationStation scarta una
+# batocera.version di 49 caratteri o piu' (do_upgradecheck_0 in
+# batocera-upgrade): V al massimo 18. Il commit di Batocera non c'e':
+# lo dice batocera.pin del commit dell'overlay.
 #
 # Le immagini finiscono in WORK/output/rf35h/images/batocera/images/:
 #     rf35h/     la nostra (loader known-good), boot.tar.xz e batocera.version
@@ -70,7 +73,8 @@ fi
 mkdir -p "$WORK/output" "$WORK/dl" "$WORK/ccache"
 WORK="$(cd "$WORK" && pwd)"
 
-VER_ID="${BATOCERA_COMMIT:0:7}.rf35h-${VERSION:-${OVERLAY:-nogit}}"
+VER_ID="rf35h-${VERSION:-${OVERLAY:-nogit}}"
+[ "${#VER_ID}" -le 24 ] || die "versione '${VER_ID#rf35h-}': al massimo 18 caratteri (EmulationStation scarta una batocera.version piu' lunga)"
 echo "==> Batocera rf35h ${VER_ID} (lavoro in $WORK)"
 
 # make di Batocera: BATCH_MODE niente terminale interattivo; GIT_COMMIT va
