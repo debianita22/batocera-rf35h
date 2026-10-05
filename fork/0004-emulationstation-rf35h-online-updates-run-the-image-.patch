@@ -1,7 +1,7 @@
 From 4b893a3a8b182ee39f29f82a5cb75bc7667bdb8e Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 03:36:17 +0200
-Subject: [PATCH 4/4] emulationstation: rf35h online updates run the image's
+Subject: [PATCH 4/5] emulationstation: rf35h online updates run the image's
  batocera-upgrade
 
 batocera-rf35h only. For an online update, EmulationStation downloads
@@ -23,7 +23,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 
 diff --git a/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch b/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch
 new file mode 100644
-index 0000000..3174048
+index 00000000..31740485
 --- /dev/null
 +++ b/package/batocera/emulationstation/batocera-emulationstation/005-rf35h-builtin-upgrade-script.patch
 @@ -0,0 +1,38 @@

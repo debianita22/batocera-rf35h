@@ -1,7 +1,7 @@
 From b5823b937fcfb41ff05ae00ccbf65e9dfc346005 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 16:02:40 +0200
-Subject: [PATCH 2/4] batocera-upgrade: rf35h updates from the GitHub releases
+Subject: [PATCH 2/5] batocera-upgrade: rf35h updates from the GitHub releases
 
 batocera-rf35h only. The default URL is the latest release of the
 batocera-rf35h repository (apply.sh writes it in place of
@@ -23,7 +23,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
  1 file changed, 19 insertions(+), 2 deletions(-)
 
 diff --git a/package/batocera/core/batocera-scripts/scripts/batocera-upgrade b/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
-index 3d63ee9..fedc461 100755
+index 3d63ee98..fedc4613 100755
 --- a/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
 +++ b/package/batocera/core/batocera-scripts/scripts/batocera-upgrade
 @@ -479,7 +479,8 @@ do_bootloader_update() {

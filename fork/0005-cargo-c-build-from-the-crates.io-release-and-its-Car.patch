@@ -1,0 +1,63 @@
+From 47382a80fe9835c6b08933b236e9aa5d52b75142 Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Mon, 5 Oct 2026 09:45:47 +0200
+Subject: [PATCH 5/5] cargo-c: build from the crates.io release and its
+ Cargo.lock
+
+Not RF35H-specific: worth sending to batocera.linux on its own.
+
+cargo-c has no Cargo.lock in its repository. Batocera's cargo
+post-process then generates one at download time, with the latest
+versions of the dependencies: today cargo-util 0.2.32 and
+cargo-credential-libsecret 0.5.10 (rustc 1.97) and kstring 2.0.5
+(rustc 1.96), and host-cargo-c stops with "rustc 1.95.0 is not supported
+by the following packages". Builders with the download already cached
+do not notice.
+
+The crate published on crates.io carries the Cargo.lock of its release
+(cargo-util 0.2.25, kstring 2.0.2, cargo-credential-libsecret 0.5.3),
+which the post-process vendors with --locked. A .crate is a gzipped tar
+that buildroot does not recognise by its suffix, hence the extract
+command.
+
+Signed-off-by: Domenico D'Arrigo <d.darrigo@outlook.it>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ package/batocera/utils-host/cargo-c/cargo-c.mk | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/package/batocera/utils-host/cargo-c/cargo-c.mk b/package/batocera/utils-host/cargo-c/cargo-c.mk
+index 9bf4690b..fc9d78d0 100644
+--- a/package/batocera/utils-host/cargo-c/cargo-c.mk
++++ b/package/batocera/utils-host/cargo-c/cargo-c.mk
+@@ -5,10 +5,25 @@
+ ################################################################################
+ 
+ CARGO_C_VERSION = v0.10.19
+-CARGO_C_SITE = $(call github,lu-zero,cargo-c,$(CARGO_C_VERSION))
++# The crates.io release, not the GitHub tag: the published crate carries the
++# Cargo.lock of its release (cargo-util 0.2.25, kstring 2.0.2, ...), the
++# repository has none. Without it the cargo post-process resolves the
++# dependencies at download time, and today's cargo-util 0.2.32, kstring 2.0.5
++# and cargo-credential-libsecret 0.5.10 need rustc 1.96/1.97: host-cargo-c
++# stops building with the rustc 1.95 of this buildroot as soon as a cached
++# download is gone.
++CARGO_C_SITE = https://static.crates.io/crates/cargo-c
++CARGO_C_SOURCE = cargo-c-0.10.19+cargo-0.93.0.crate
+ CARGO_C_LICENSE = MIT License
+ CARGO_C_LICENSE_FILES = LICENSE
+ 
+ HOST_CARGO_C_DEPENDENCIES = host-pkgconf host-rustc host-openssl
+ 
++# A .crate is a gzipped tar, which buildroot does not recognise by its suffix.
++# The cargo post-process repacks it (with VENDOR) under the same name.
++define HOST_CARGO_C_EXTRACT_CMDS
++	$(ZCAT) $(HOST_CARGO_C_DL_DIR)/$(HOST_CARGO_C_SOURCE) | \
++		$(TAR) --strip-components=1 -C $(@D) $(TAR_OPTIONS) -
++endef
++
+ $(eval $(host-cargo-package))
+-- 
+2.43.0
+

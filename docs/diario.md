@@ -207,6 +207,34 @@ Qui la build gira sui runner gratuiti, come per Lakka, a parti:
   da rifare da capo, quelli il cui `.mk` o le cui patch sono cambiati
   (buildroot non se ne accorge da solo).
 
+## Prima build: host-cargo-c (5/10/2026)
+
+La prima build vera (run 37252552005) si e' fermata dopo 2 ore, al
+pacchetto 217 di 847, su `host-cargo-c`, due tentativi uguali. Il rapporto
+d'errore era inutile: cercando "error" in tutto il log prendeva le prove
+`-Werror=...` di meson e `fterrors.h` di freetype. Ora guarda solo la coda
+del log, con i formati di errore di gcc, cargo, make e meson, piu' le ultime
+righe; con una ripresa dallo stato salvato (il pacchetto interrotto e' il
+primo che si rifa') l'errore vero e' arrivato in 4 minuti:
+
+    error: rustc 1.95.0 is not supported by the following packages:
+      cargo-credential-libsecret@0.5.10 requires rustc 1.97
+      cargo-util@0.2.32 requires rustc 1.97
+      kstring@2.0.5 requires rustc 1.96.0
+
+Non c'entra l'RF35H. cargo-c (v0.10.19, dicembre 2025) non ha `Cargo.lock`
+nel repository; lo `cargo-post-process` di Batocera allora ne genera uno al
+momento dello scaricamento, con le versioni piu' recenti delle dipendenze, e
+quelle di oggi vogliono un rustc piu' nuovo dell'1.95 di questo buildroot. Chi
+ha lo scaricamento gia' in cache non se ne accorge. Il crate pubblicato su
+crates.io porta il `Cargo.lock` del suo rilascio (cargo-util 0.2.25, kstring
+2.0.2, cargo-credential-libsecret 0.5.3): `fork/0005` scarica quello (URL
+verificato, `post_process_unpack` usa `tar -xzf`, il `.crate` e' un tar
+gzip) con un comando di estrazione proprio. Da proporre a Batocera a parte.
+Gli altri pacchetti Rust della build hanno tutti il loro `Cargo.lock`
+(dmd-play-rust, evsieve, libdovi, libretro-holani, logi-wheel; librsvg e' un
+tarball di rilascio GNOME).
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e

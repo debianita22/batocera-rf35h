@@ -1,7 +1,7 @@
 From fc0646452297fb10e139bdc2e0e5fc1899c30b1e Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 16:03:41 +0200
-Subject: [PATCH 3/4] rf35h: target and image for the XiFan RF35H
+Subject: [PATCH 3/5] rf35h: target and image for the XiFan RF35H
 
 batocera-rf35h only. configs/batocera-rf35h.board is the RK3326 board
 with two images from the same system:
@@ -37,7 +37,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 
 diff --git a/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd b/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd
 new file mode 100644
-index 0000000..0f3d61d
+index 00000000..0f3d61d3
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/rf35h/boot/boot.cmd
 @@ -0,0 +1,8 @@
@@ -51,7 +51,7 @@ index 0000000..0f3d61d
 +sysboot ${devtype} ${devnum}:${distro_bootpart} any 0x100000 /extlinux/extlinux.conf
 diff --git a/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh b/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh
 new file mode 100755
-index 0000000..9ab1a32
+index 00000000..9ab1a327
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/rf35h/create-boot-script.sh
 @@ -0,0 +1,52 @@
@@ -109,7 +109,7 @@ index 0000000..9ab1a32
 +exit 0
 diff --git a/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf b/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf
 new file mode 100644
-index 0000000..7789318
+index 00000000..77893181
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/rf35h/extlinux/extlinux.conf
 @@ -0,0 +1,5 @@
@@ -120,7 +120,7 @@ index 0000000..7789318
 +  APPEND label=BATOCERA console=ttyS1,1500000 console=tty3 quiet loglevel=0 consoleblank=0 vt.global_cursor_default=0 uboot.hwid_adc=${hwid_adc}
 diff --git a/board/batocera/rockchip/rk3326/rf35h/genimage.cfg b/board/batocera/rockchip/rk3326/rf35h/genimage.cfg
 new file mode 100644
-index 0000000..c6693cc
+index 00000000..c6693cc8
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/rf35h/genimage.cfg
 @@ -0,0 +1,43 @@
@@ -169,7 +169,7 @@ index 0000000..c6693cc
 +}
 diff --git a/configs/batocera-rf35h.board b/configs/batocera-rf35h.board
 new file mode 100644
-index 0000000..a5250de
+index 00000000..a5250de9
 --- /dev/null
 +++ b/configs/batocera-rf35h.board
 @@ -0,0 +1,22 @@
