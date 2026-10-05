@@ -1,4 +1,4 @@
-From d2f232525eb8d839a64ab3686e3c56a681072864 Mon Sep 17 00:00:00 2001
+From 1b37ba2fb36be26b16be36c7469c519dcbdfde40 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 21:25:01 +0200
 Subject: [PATCH 6/6] cabextract: fetch the sources from GitHub
@@ -8,20 +8,22 @@ Buildroot mirror copy), timed out from a CI runner and the build stopped
 at host-cabextract. The same sources are the cabextract/ directory of
 kyz/libmspack on GitHub, tag v1.11: use that archive with a subdirectory
 and autoreconf (the git tree has no configure script; AM_ICONV needs
-gettext's m4 files). Verified: configure --with-external-libmspack and
-make from that tree give cabextract 1.11 linked to libmspack.
+gettext's m4 files). The host tool builds with the bundled libmspack
+sources, since there is no host-libmspack package. Verified: autoreconf,
+configure and make from that tree give cabextract 1.11, with the bundled
+sources and with an external libmspack.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 ---
- package/batocera/utils/cabextract/cabextract.mk | 16 +++++++++++++---
- 1 file changed, 13 insertions(+), 3 deletions(-)
+ .../batocera/utils/cabextract/cabextract.mk   | 21 +++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
 
 diff --git a/package/batocera/utils/cabextract/cabextract.mk b/package/batocera/utils/cabextract/cabextract.mk
-index 05d69182..c6e6297c 100644
+index 05d69182..abb5d009 100644
 --- a/package/batocera/utils/cabextract/cabextract.mk
 +++ b/package/batocera/utils/cabextract/cabextract.mk
-@@ -4,12 +4,22 @@
+@@ -4,12 +4,25 @@
  #
  ################################################################################
  
@@ -34,17 +36,21 @@ index 05d69182..c6e6297c 100644
 -CABEXTRACT_SOURCE = cabextract-$(CABEXTRACT_VERSION).tar.gz
 -CABEXTRACT_SITE = https://www.cabextract.org.uk
 -CABEXTRACT_DEPENDENCIES = libmspack
+-
 +CABEXTRACT_SOURCE = libmspack-v$(CABEXTRACT_VERSION).tar.gz
 +CABEXTRACT_SITE = $(call github,kyz,libmspack,v$(CABEXTRACT_VERSION))
 +CABEXTRACT_SUBDIR = cabextract
 +CABEXTRACT_AUTORECONF = YES
 +# AM_ICONV in configure.ac comes from gettext's m4 files
 +CABEXTRACT_DEPENDENCIES = libmspack host-gettext
-+HOST_CABEXTRACT_DEPENDENCIES = host-libmspack host-gettext
- 
  CABEXTRACT_CONF_OPTS = --with-external-libmspack
-+HOST_CABEXTRACT_CONF_OPTS = --with-external-libmspack
  
++# There is no host-libmspack: the host tool (it unpacks the Xbox pad
++# firmware .cab files at build time) uses the libmspack sources bundled
++# in the same archive.
++HOST_CABEXTRACT_DEPENDENCIES = host-gettext
++HOST_CABEXTRACT_CONF_OPTS = --without-external-libmspack
++
  $(eval $(autotools-package))
  $(eval $(host-autotools-package))
 -- 

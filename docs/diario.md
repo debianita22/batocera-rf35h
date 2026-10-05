@@ -277,8 +277,13 @@ repository `kyz/libmspack` su GitHub, tag `v1.11` (i `mspack/*` sono link a
 non ha `configure`, quindi `AUTORECONF = YES` con `host-gettext` per
 `AM_ICONV`. Provato qui: `autoreconf -i`, `configure
 --with-external-libmspack`, `make` -> `cabextract version 1.11` linkato a
-libmspack. libmspack invece e' un pacchetto di buildroot, col suo hash e la
-copia sul mirror, ed era gia' costruito. Anche questo da proporre a Batocera.
+libmspack. Prima versione sbagliata: `host-libmspack` non esiste (il
+pacchetto libmspack di buildroot non ha la variante host, e nella build c'e'
+solo `host-cabextract`; il `.mk` di Batocera per l'host trovava libmspack
+nel container, se lo trovava), e make si e' fermato subito senza regola.
+Ora il tool per l'host si compila coi sorgenti libmspack dell'archivio
+(`--without-external-libmspack`), provato anche questo. Anche questo da
+proporre a Batocera.
 
 ## Revisione indipendente (5/10/2026)
 
