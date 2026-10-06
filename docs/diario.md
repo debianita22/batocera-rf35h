@@ -318,6 +318,32 @@ lo stato gia' salvato, `unpack` ripulisce `include-fixed`: via cio' che
 esiste anche in `sysroot/usr/include`, tranne `limits.h`, `syslimits.h` e
 `README` che sono di gcc. `test-ci-build.sh` 23/23 coi due casi nuovi.
 
+## Prime immagini (6/10/2026)
+
+Il run 37410849455 (commit 3dec2a9, ripreso da 650) ha finito la build:
+846 pacchetti su 847 (l'ultimo e' il target-finalize), immagini fatte,
+`verify-image.sh` **Conforme**. Sei header di altri pacchetti tolti da
+`include-fixed` all'avvio, come previsto. In tutto la build da zero ha
+preso circa 15 ore di runner in sette run (quattro fermate: cargo-c,
+nfs-utils/.la, cabextract, include-fixed, piu' un run mai partito per
+GitHub); senza intoppi starebbe in tre parti.
+
+- `batocera-rk3326-rf35h-44-20261006.img.gz` 1,7 GB; `boot.tar.xz` 1,7 GB
+  (sotto i 2 GiB di una release GitHub, ma di poco: squashfs 1,5 GB +
+  rufomaculata 141 MB; quando si aggiungono core o giochi va tenuto
+  d'occhio).
+- `batocera.version`: `44-dev-rf35h-ci-10-1d49425 2026/10/06 00:29`. Il
+  nome e' quello del run in cui `batocera-system` e' stato costruito, non
+  dell'ultimo: una ripresa tiene la versione (gia' documentato). Per una
+  release vera la build parte da zero e il problema non c'e'.
+- Artifact del run (14 giorni): `batocera-rf35h-ci-11-3dec2a9` (immagine
+  rf35h e file dell'aggiornamento, 3,3 GB zippati), `...-upstream`
+  (immagine mainline, 1,7 GB), `log-1.tar.zst`.
+- ccache 3,9 GB, 19% di hit: le riprese hanno riusato poco perche' quasi
+  tutto si e' compilato una volta sola.
+
+Ora tocca alla console: vedi "Da verificare sulla console".
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e
