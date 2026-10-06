@@ -60,10 +60,18 @@ fake_tree() {
 	mkdir -p "$sr/pkgconfig"
 	printf "# libtool\ndependency_libs=' /rf35h/build/util-linux-2.41.4/libblkid.la -lrt'\nlibdir='%s'\n" "$sr" > "$sr/libmount.la"
 	printf 'prefix=/usr\nLibs: -L${libdir} -lpcap\n' > "$sr/pkgconfig/libpcap.pc"
+	# libstdc++.la nomina la cartella di build di gcc solo come -L: non conta
+	pkg host-gcc-final-14.3.0 downloaded extracted patched configured built host_installed installed
+	printf "# libtool\ndependency_libs=' -L/rf35h/build/host-gcc-final-14.3.0/aarch64-buildroot-linux-gnu/libstdc++-v3/src -lm'\n" > "$sr/libstdc++.la"
+	# include-fixed di gcc con un header copiato dal sysroot (gcc rifatto)
+	local inc="$T/w/work/output/rf35h/host/lib/gcc/aarch64-buildroot-linux-gnu/14.3.0/include-fixed"
+	mkdir -p "$inc/rga" "$sr/../include/rga"
+	echo limits > "$inc/limits.h"; echo syslimits > "$inc/syslimits.h"; echo readme > "$inc/README"
+	echo rga > "$inc/rga/RgaApi.h"; echo rga > "$sr/../include/rga/RgaApi.h"; echo drm > "$sr/../include/rga/drmrga.h"
 	mkdir -p "$T/w/work/output/rf35h/host/bin"; echo gcc > "$T/w/work/output/rf35h/host/bin/gcc"
 	echo cache > "$T/w/work/ccache/entry"
 	echo "batoceralinux/batocera.linux-build@sha256:0123" > "$T/w/work/container.txt"
-	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" "util-linux 2.41.4" "libpcap 1.10.6" > "$T/w/packages.txt"
+	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" "util-linux 2.41.4" "libpcap 1.10.6" "host-gcc-final 14.3.0" > "$T/w/packages.txt"
 }
 
 echo "==> pack e unpack"
@@ -83,6 +91,9 @@ b="$T/w/work/output/rf35h/build"
 [ ! -e "$b/linux-headers-7.2.8/src" ] && [ ! -e "$b/python3-configobj-5.0.8/src" ] && ok "linux-headers e python3-configobj potati (nome esatto)" || bad "linux-headers o python3-configobj tenuti interi"
 [ -f "$b/util-linux-2.41.4/src/a.o" ] && ok "util-linux intero (libmount.la del sysroot rimanda alla sua cartella di build)" || bad "util-linux potato"
 [ ! -e "$b/libpcap-1.10.6/src" ] && ok "libpcap potato (il suo .pc non rimanda a build/)" || bad "libpcap tenuto intero"
+[ ! -e "$b/host-gcc-final-14.3.0/src" ] && [ -f "$b/host-gcc-final-14.3.0/.stamp_installed" ] && ok "host-gcc-final potato (libstdc++.la ha solo un -L nella sua cartella di build)" || bad "host-gcc-final: $(ls -A "$b/host-gcc-final-14.3.0" 2>&1 | tr '\n' ' ')"
+inc="$T/w/work/output/rf35h/host/lib/gcc/aarch64-buildroot-linux-gnu/14.3.0/include-fixed"
+[ ! -e "$inc/rga" ] && [ -f "$inc/limits.h" ] && [ -f "$inc/syslimits.h" ] && [ -f "$inc/README" ] && ok "include-fixed: rga/RgaApi.h (copiato dal sysroot) tolto, limits.h e syslimits.h restano" || bad "include-fixed: $(cd "$inc" && find . -type f | tr '\n' ' ')"
 [ ! -e "$b/bar-2.0" ] && ok "pacchetto interrotto (configurato, non finito) tolto" || bad "bar-2.0 ancora li'"
 [ ! -e "$b/qux-0.1" ] && ok "pacchetto interrotto (estratto) tolto" || bad "qux-0.1 ancora li'"
 [ ! -e "$b/configgen-local" ] && ok "pacchetto locale interrotto (rsync) tolto" || bad "configgen-local ancora li'"
@@ -95,7 +106,7 @@ b="$T/w/work/output/rf35h/build"
 echo "==> stato vecchio: pacchetto richiesto gia' potato"
 fake_tree
 rm -rf "$b/util-linux-2.41.4/src" "$b/util-linux-2.41.4/Makefile"	# potato da una CI che non guardava i .la
-[ "$(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h")" = "util-linux-2.41.4" ] && ok "prune-build.sh -r elenca util-linux-2.41.4" || bad "prune-build.sh -r: $(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h" | tr '\n' ' ')"
+[ "$(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h")" = "util-linux-2.41.4" ] && ok "prune-build.sh -r elenca util-linux-2.41.4 e non host-gcc-final" || bad "prune-build.sh -r: $(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h" | tr '\n' ' ')"
 mkdir -p "$T/w/dl-state"; (cd "$T/w/work" && tar -cf - output ccache container.txt | zstd -q -3 > "$T/w/dl-state/state-1.tar.zst")
 rm -rf "$T/w/work"
 ci "$O/tools/ci-build.sh" unpack 1 > "$T/unpack2.log" 2>&1 || { cat "$T/unpack2.log"; exit 1; }

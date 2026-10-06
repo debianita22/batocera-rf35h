@@ -354,8 +354,11 @@ cmd_unpack() {
 	# di libtool con la sua cartella di build in dependency_libs): chi lo
 	# usa cercherebbe la' e fallirebbe (nfs-utils con util-linux). Lo stato
 	# puo' venire da una potatura che non lo sapeva: si rifa' da capo.
+	# Mai la toolchain: un gcc rifatto su un sysroot pieno si copia in
+	# include-fixed header di altri pacchetti (vedi sotto).
 	local name
 	while read -r name; do
+		case "${name}" in host-gcc-*|host-binutils-*|glibc-*|linux-headers-*) continue ;; esac
 		d="${OUT}/build/${name}"
 		[ -f "${d}/.stamp_installed" ] || continue
 		if [ -z "$(find "${d}" -mindepth 1 -maxdepth 1 ! -name '.*' -print -quit)" ]; then
@@ -363,7 +366,33 @@ cmd_unpack() {
 			rm -rf "${d}"
 		fi
 	done < <("$O/tools/prune-build.sh" -r "${OUT}")
+	fix_include_fixed
 	echo "  $(progress)"
+}
+
+# include-fixed di gcc: fixincludes lo riempie con copie "corrette" degli
+# header che trova nel sysroot quando gcc si compila. Un gcc compilato su un
+# sysroot vuoto ci mette limits.h e syslimits.h; uno rifatto dopo (e' successo
+# in una ripresa) ci copia header di altri pacchetti, da soli: rga/RgaApi.h
+# senza il drmrga.h accanto, e retroarch non compilava. Via tutto cio' che
+# esiste anche nel sysroot, tranne i file di gcc.
+fix_include_fixed() {
+	local inc sys rel n=0
+	for inc in "${OUT}"/host/lib/gcc/*/*/include-fixed; do
+		[ -d "${inc}" ] || continue
+		sys="${OUT}/host/$(basename "$(dirname "$(dirname "${inc}")")")/sysroot/usr/include"
+		[ -d "${sys}" ] || continue
+		while IFS= read -r -d '' rel; do
+			rel="${rel#"${inc}"/}"
+			case "${rel}" in limits.h|syslimits.h|README) continue ;; esac
+			if [ -e "${sys}/${rel}" ]; then
+				rm -f "${inc}/${rel}"; n=$((n + 1))
+				echo "  include-fixed: tolto ${rel} (c'e' nel sysroot)"
+			fi
+		done < <(find "${inc}" -type f -print0)
+		find "${inc}" -mindepth 1 -type d -empty -delete
+	done
+	[ "${n}" -eq 0 ] || note warning "include-fixed ripulito" "${n} header di altri pacchetti copiati da un gcc rifatto, tolti"
 }
 
 cmd_collect() {

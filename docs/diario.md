@@ -292,6 +292,32 @@ puo' eseguire il suo test e sostituisce fnmatch con il suo: stesso effetto
 con `CABEXTRACT_CONF_ENV = ac_cv_func_fnmatch_works=yes`, e la patch va
 via. Anche questo da proporre a Batocera.
 
+## Quarta build: include-fixed di gcc (6/10/2026)
+
+Con cabextract a posto la ripresa (run 37380547211) e' andata da 555 a 650
+in un'ora e si e' fermata su `retroarch`:
+
+    host/lib/gcc/aarch64-buildroot-linux-gnu/14.3.0/include-fixed/rga/RgaApi.h:42:10:
+    fatal error: drmrga.h: No such file or directory
+
+Un header di `rockchip-rga` dentro `include-fixed` di gcc, da solo, senza il
+`drmrga.h` che sta accanto nel sysroot. Ce l'ha messo fixincludes, che gira
+quando gcc si compila e copia in `include-fixed` le sue versioni "corrette"
+degli header che trova nel sysroot: su un sysroot vuoto (la toolchain si fa
+per prima) non trova niente, ma qui gcc era stato **rifatto** a build
+avanzata, dalla cura di `unpack` del giorno prima. `libstdc++.la` nomina la
+cartella di build di gcc (`-L/rf35h/build/host-gcc-final-14.3.0/...`), la
+scansione dei `.la` l'ha presa per un rimando e, siccome gcc era potato,
+l'ha fatto rifare. Effetto collaterale di una mia cura, non di Batocera.
+
+Due correzioni: la scansione conta solo i file nominati (`.la`, `.a`, `.so`
+dentro `/build/<pacchetto>/`), non un `-L` che e' solo una cartella di
+ricerca in piu' e puo' mancare; e la toolchain (`host-gcc-*`,
+`host-binutils-*`, `glibc-*`, `linux-headers-*`) non si rifa' comunque. Per
+lo stato gia' salvato, `unpack` ripulisce `include-fixed`: via cio' che
+esiste anche in `sysroot/usr/include`, tranne `limits.h`, `syslimits.h` e
+`README` che sono di gcc. `test-ci-build.sh` 23/23 coi due casi nuovi.
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e
@@ -374,7 +400,7 @@ fallisce.
 
 Stato dei test (tutti in `ci-check.sh`, quindi a ogni push e prima di ogni
 build): `test-upgrade` 12, `test-verify-image` 26 (l'immagine giusta e 25
-mutazioni), `test-ci-build` 21, `test-image-step` 9.
+mutazioni), `test-ci-build` 23, `test-image-step` 9.
 
 Cercati anche, nei .mk degli 847 pacchetti, scaricamenti fuori dalla fase di
 download (che, come `cargo-c`, prenderebbero l'ultima versione di qualcosa):

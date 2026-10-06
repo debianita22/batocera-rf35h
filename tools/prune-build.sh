@@ -28,10 +28,15 @@
 #   wireless-regdb        batocera-initramfs ne copia il database
 # e quelle a cui rimanda un file di host/ (sysroot compreso): i .la di
 # libtool, i .pc, i .cmake e gli script *-config possono contenere il
-# percorso della cartella di build di un pacchetto (dependency_libs di
-# libmount.la rimanda a build/util-linux-*/libblkid.la: buildroot sistema
-# i percorsi /usr, non questi), e chi li usa dopo lo cerca li' (nfs-utils:
-# "cannot find the library .../build/util-linux-2.41.4/libblkid.la").
+# percorso di un file (.la, .a, .so) nella cartella di build di un pacchetto
+# (dependency_libs di libmount.la rimanda a build/util-linux-*/libblkid.la:
+# buildroot sistema i percorsi /usr, non questi), e chi li usa dopo lo
+# cerca li' (nfs-utils: "cannot find the library
+# .../build/util-linux-2.41.4/libblkid.la"). Conta solo un file: un
+# "-L/build/host-gcc-final-*/..." (libstdc++.la) e' una cartella di ricerca
+# in piu', che puo' mancare; tenerne conto farebbe rifare gcc, e un gcc
+# rifatto su un sysroot pieno si copia in include-fixed header di altri
+# pacchetti (rga/RgaApi.h senza drmrga.h: retroarch non compilava piu').
 # Cercato nei .mk di Batocera e di buildroot, infrastruttura e hook di
 # target-finalize compresi: nient'altro legge una cartella di build dopo
 # l'installazione. Un pacchetto non finito non si tocca mai.
@@ -53,13 +58,14 @@ BUILD="$OUT/build"
 # nome-versione esatto: linux-headers, linux-pam, python3-configobj non c'entrano
 KEEP_RE='^(linux|python3|alllinuxfirmwares|wireless-regdb)-[0-9][0-9.]*$'
 
-# le cartelle di build a cui rimanda un file di host/ (dentro al container il
-# percorso e' un altro, /rf35h/build/...: conta solo il nome dopo /build/)
+# le cartelle di build di cui un file di host/ nomina un file (dentro al
+# container il percorso e' un altro, /rf35h/build/...: conta solo il nome
+# dopo /build/)
 referenced() {
 	[ -d "$OUT/host" ] || return 0
 	find "$OUT/host" -type f \( -name '*.la' -o -name '*.pc' -o -name '*.cmake' -o -name '*.prl' -o -name '*-config' \) -print0 2>/dev/null \
-		| xargs -0 -r grep -ahoE "/build/[^/'\"[:space:]]+/" 2>/dev/null \
-		| sed -E 's|^/build/||; s|/$||' | sort -u
+		| xargs -0 -r grep -ahoE "/build/[^/'\"[:space:]]+/[^'\"[:space:]]*\.(la|a|so)([.0-9]*)?([[:space:]'\"]|$)" 2>/dev/null \
+		| sed -E 's|^/build/([^/]+)/.*|\1|' | sort -u
 }
 mapfile -t REFD < <(referenced)
 if [ "$LIST" = yes ]; then
