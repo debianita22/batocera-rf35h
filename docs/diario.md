@@ -344,6 +344,20 @@ GitHub); senza intoppi starebbe in tre parti.
 
 Ora tocca alla console: vedi "Da verificare sulla console".
 
+## Prima release: v0.1.0-rc1 (21/10/2026)
+
+Le immagini del 6/10 erano solo artifact di una build di prova, e gli
+artifact durano 14 giorni: il 20/10 sono spariti, e il repository non aveva
+nessuna release. Da oggi le immagini si pubblicano come release: lanciata
+la build di release `v0.1.0-rc1` (run 39618555460, commit 0689656,
+*Run workflow* con version e prerelease), da zero come vuole build.yml
+(niente riprese per una release: i pacchetti verrebbero da commit diversi).
+Pre-release perche' non ancora provata sulla console: `releases/latest` non
+la vede, quindi nessuna console la riceverebbe come aggiornamento (con solo
+pre-release il controllo da EmulationStation non trova niente, e basta).
+Quando la prova sulla console va bene si promuove, o si pubblica `v0.1.0`.
+Tempo previsto: tre parti, circa 15-16 ore.
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e
