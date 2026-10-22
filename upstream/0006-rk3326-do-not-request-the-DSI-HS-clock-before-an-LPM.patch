@@ -1,0 +1,78 @@
+From a9b0be425783c336fd1e2105fdcfe74d8e8a10d7 Mon Sep 17 00:00:00 2001
+From: Domenico D'Arrigo <d.darrigo@outlook.it>
+Date: Thu, 22 Oct 2026 21:09:31 +0200
+Subject: [PATCH 6/6] rk3326: do not request the DSI HS clock before an LPM
+ panel is initialised
+
+The XiFan RF35H panel (generic-dsi, flags 0xe03: video, burst, no EOT,
+non-continuous clock, LPM) stays dark when dw-mipi-dsi asserts
+PHY_TXREQUESTCLKHS before the panel's init sequence. For panels that
+take their init in low power mode over a non-continuous clock lane,
+power the controller up without the clock request; atomic_enable
+requests it once the panel is ready. All RK3326 panels in the tree
+declare both flags, so they all take this path, which is the sequence
+the RF35H already boots with on other distributions.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
+---
+ ...si-lpm-panel-no-hs-clock-before-init.patch | 47 +++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+ create mode 100644 board/batocera/rockchip/rk3326/linux_patches/103-dw-mipi-dsi-lpm-panel-no-hs-clock-before-init.patch
+
+diff --git a/board/batocera/rockchip/rk3326/linux_patches/103-dw-mipi-dsi-lpm-panel-no-hs-clock-before-init.patch b/board/batocera/rockchip/rk3326/linux_patches/103-dw-mipi-dsi-lpm-panel-no-hs-clock-before-init.patch
+new file mode 100644
+index 00000000..92a818bb
+--- /dev/null
++++ b/board/batocera/rockchip/rk3326/linux_patches/103-dw-mipi-dsi-lpm-panel-no-hs-clock-before-init.patch
+@@ -0,0 +1,47 @@
++From: Domenico D'Arrigo <d.darrigo@outlook.it>
++Subject: drm/bridge: dw-mipi-dsi: do not request the HS clock before an LPM panel is initialised
++
++dw_mipi_dsi_mode_set() switches to command mode for the panel's
++pre_enable/prepare through dw_mipi_dsi_set_mode(), which also asserts
++PHY_TXREQUESTCLKHS. A panel that takes its init sequence in low power
++mode over a non-continuous clock lane does not need the high speed
++clock at that point, and the XiFan RF35H panel (generic-dsi, flags
++0xe03) does not come up when it is asserted before the init sequence.
++
++For such panels only power the controller up: it is in reset from
++dw_mipi_dsi_init() and in command mode from
++dw_mipi_dsi_command_mode_config(). The clock request still happens in
++atomic_enable, once the panel is initialised. Every RK3326 panel in the
++tree (generic-dsi on eight devices, kd35t133, nv3051d, st7701) declares
++MIPI_DSI_MODE_LPM and MIPI_DSI_CLOCK_NON_CONTINUOUS, so this is the
++path they all take; it is the sequence the RF35H has been booting with
++on other distributions.
++
++--- a/drivers/gpu/drm/bridge/synopsys/dw-mipi-dsi.c
+++++ b/drivers/gpu/drm/bridge/synopsys/dw-mipi-dsi.c
++@@ -1019,8 +1019,23 @@
++ 
++ 	dw_mipi_dsi_wait_for_two_frames(adjusted_mode);
++ 
++-	/* Switch to cmd mode for panel-bridge pre_enable & panel prepare */
++-	dw_mipi_dsi_set_mode(dsi, 0);
+++	/*
+++	 * Switch to cmd mode for panel-bridge pre_enable & panel prepare.
+++	 *
+++	 * A panel that takes its init sequence in low power mode over a
+++	 * non-continuous clock lane has no use for the high speed clock
+++	 * request that dw_mipi_dsi_set_mode() asserts here, and some
+++	 * (XiFan RF35H) do not come up when it is asserted before they are
+++	 * initialised: the controller is still in reset from
+++	 * dw_mipi_dsi_init() and in command mode from
+++	 * dw_mipi_dsi_command_mode_config(), so power it up and leave the
+++	 * clock request to atomic_enable, after the panel is ready.
+++	 */
+++	if ((dsi->mode_flags & MIPI_DSI_MODE_LPM) &&
+++	    (dsi->mode_flags & MIPI_DSI_CLOCK_NON_CONTINUOUS))
+++		dsi_write(dsi, DSI_PWR_UP, POWERUP);
+++	else
+++		dw_mipi_dsi_set_mode(dsi, 0);
++ 
++ 	if (phy_ops->power_on)
++ 		phy_ops->power_on(dsi->plat_data->priv_data);
+-- 
+2.43.0
+

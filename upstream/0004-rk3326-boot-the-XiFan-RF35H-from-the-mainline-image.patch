@@ -1,7 +1,7 @@
 From 6e5d29074a13f37719f9e79da5a7ed916f317e5d Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:58:31 +0200
-Subject: [PATCH 4/5] rk3326: boot the XiFan RF35H from the mainline image
+Subject: [PATCH 4/6] rk3326: boot the XiFan RF35H from the mainline image
 
 The RF35H's DTB goes on the boot partition of the mainline image, with
 an extlinux.conf.rf35h to rename into extlinux.conf, as for the other
@@ -20,7 +20,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
  1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh b/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
-index 839160e..5cedf01 100755
+index 839160e0..5cedf01f 100755
 --- a/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
 +++ b/board/batocera/rockchip/rk3326/mainline/create-boot-script.sh
 @@ -17,7 +17,7 @@ BATOCERA_BINARIES_DIR=$6

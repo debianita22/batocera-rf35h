@@ -1,7 +1,7 @@
 From 8361fe807b646197512086c00f9cd1581c4651d5 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 01:21:28 +0200
-Subject: [PATCH 5/5] rk3326: load rk915 for its device tree node
+Subject: [PATCH 5/6] rk3326: load rk915 for its device tree node
 
 The rk915 driver powers the chip itself (no mmc-pwrseq): the SDIO card
 it binds to only appears once the module is loaded. The module was only
@@ -23,7 +23,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 
 diff --git a/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf b/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf
 new file mode 100644
-index 0000000..d4700b6
+index 00000000..d4700b64
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/fsoverlay/etc/modprobe.d/rk915.conf
 @@ -0,0 +1,5 @@

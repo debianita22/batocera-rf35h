@@ -1,7 +1,7 @@
 From 5f3ba9cb7a72d8952a4d8c4f2e8f1cf992f7f5e5 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:57:17 +0200
-Subject: [PATCH 2/5] rocknix-joypad: support a rumble motor on a GPIO
+Subject: [PATCH 2/6] rocknix-joypad: support a rumble motor on a GPIO
 
 The XiFan RF35H drives its vibration motor from a plain GPIO, not from a
 PWM. The patch lets the singleadc driver take "rumble-gpios" when there
@@ -21,7 +21,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 
 diff --git a/package/batocera/controllers/pads/rocknix-joypad/0001-singleadc-support-a-rumble-motor-on-a-GPIO.patch b/package/batocera/controllers/pads/rocknix-joypad/0001-singleadc-support-a-rumble-motor-on-a-GPIO.patch
 new file mode 100644
-index 0000000..635eb3a
+index 00000000..635eb3a9
 --- /dev/null
 +++ b/package/batocera/controllers/pads/rocknix-joypad/0001-singleadc-support-a-rumble-motor-on-a-GPIO.patch
 @@ -0,0 +1,93 @@

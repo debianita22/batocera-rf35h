@@ -104,10 +104,45 @@ R36 Ultra. La linea host-wake (GPIO0_A5) ha il pull-down come sul firmware
 originale, nel `pinctrl-0` di `&sdio` (un pinctrl sul nodo `rk915-wifi` non
 verrebbe applicato: nessun driver si lega a quel dispositivo).
 
-**Fix DSI `r-025` di Lakka: non c'e'.** Su Lakka c'era, e non si era mai
-provato senza. In Batocera manca, e i sette dispositivi RK3326 col driver
-`generic-dsi` (tutti con `flags=0xe03`, come l'RF35H) funzionano senza. Prima
-prova senza; se lo schermo resta nero, e' il primo indiziato.
+**Fix DSI `r-025` di Lakka: non c'era (4/10), ora c'e' (22/10, 0006).** Su
+Lakka c'era, e non si era mai provato senza. In Batocera manca, e i sette
+dispositivi RK3326 col driver `generic-dsi` (tutti con `flags=0xe03`, come
+l'RF35H) funzionano senza; per questo la prima release `v0.1.0-rc1` e' senza.
+Il 22/10 Domenico ha chiesto di metterlo: vedi "0006: il fix DSI" sotto.
+
+### 0006: il fix DSI
+
+`dw_mipi_dsi_mode_set()` passa in command mode per l'init del pannello con
+`dw_mipi_dsi_set_mode(dsi, 0)`, che oltre a RESET, CMD_MODE e POWERUP
+asserisce `PHY_TXREQUESTCLKHS` in `DSI_LPCLK_CTRL`: la corsia di clock va in
+high speed prima che il pannello sia inizializzato. La `r-025` di Lakka
+sostituisce la chiamata con la sola `dsi_write(dsi, DSI_PWR_UP, POWERUP)`:
+RESET e' gia' scritto da `dw_mipi_dsi_init()` e CMD_MODE da
+`dw_mipi_dsi_command_mode_config()`, chiamate poche righe prima, quindi
+l'unica differenza vera e' non chiedere il clock HS. La richiesta non si
+perde: `atomic_enable` chiama `set_mode(MIPI_DSI_MODE_VIDEO)` dopo che il
+pannello e' pronto, ed e' l'unico altro punto che scrive `DSI_LPCLK_CTRL`.
+Analisi fatta per Lakka (`docs/diario.md` di lakka-rf35h, "r-025: cosa fa
+davvero") e riverificata sulla 7.2.8 di Batocera: le righe sono le stesse.
+
+Qui la patch (`linux_patches/103-dw-mipi-dsi-lpm-panel-no-hs-clock-before-
+init.patch`, nella serie upstream) e' **condizionata** ai pannelli che hanno
+senso: `MIPI_DSI_MODE_LPM` (l'init si manda in low power) **e**
+`MIPI_DSI_CLOCK_NON_CONTINUOUS`; per gli altri resta `set_mode(dsi, 0)`.
+Sull'RK3326 di Batocera la condizione vale per tutti: gli otto `generic-dsi`
+con `flags=0xe03` (bit 0, 1, 9, 10, 11 = VIDEO, BURST, NO_EOT,
+CLOCK_NON_CONTINUOUS, LPM) e i driver `kd35t133`, `nv3051d`, `st7701` (tutti
+con `MIPI_DSI_MODE_LPM`, verificato nei sorgenti della 7.2.8). Quindi anche
+Odroid Go2, RG351, R36S e gli altri cambiano sequenza: e' la stessa con cui
+l'RF35H e tutti gli altri RK3326 di ROCKNIX/Lakka si avviano da sempre, e il
+clock HS arriva comunque prima del video. Per gli altri SoC che usano
+dw-mipi-dsi (STM32, RK3288, PX30...) niente cambia: la patch sta in
+`linux_patches` della board RK3326.
+
+Verifica: `check-dtb.sh` ora compila con W=1 ogni `.c` del kernel toccato
+dalle patch kernel della serie upstream, con e senza la patch, e pretende
+che la patch non aggiunga avvisi (`dw-mipi-dsi.c`: 0 e 0). Sulla console lo
+dice solo lo schermo.
 
 ### 0002: il motore su GPIO
 
@@ -490,7 +525,7 @@ questa macchina; la prima build sara' quella in CI), e l'hardware.
 
 ## Da verificare sulla console
 
-1. Immagine `rf35h`: avvio, immagine sul pannello (senza `r-025`), 60 Hz.
+1. Immagine `rf35h`: avvio, immagine sul pannello (dalla v0.1.0-rc2 col fix DSI), 60 Hz.
 2. Pad in EmulationStation, hotkey Select (Select+Start esce dal gioco),
    direzione degli stick, vibrazione.
 3. Wi-Fi: modulo, scansione, connessione, MAC stabile tra un avvio e

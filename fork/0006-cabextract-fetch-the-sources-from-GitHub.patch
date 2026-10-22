@@ -1,4 +1,4 @@
-From 383457d68c6d43e903b384151239ce574363dd60 Mon Sep 17 00:00:00 2001
+From 9499725483237a24dcd51b6207a8166efca93bb0 Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 21:25:01 +0200
 Subject: [PATCH 6/6] cabextract: fetch the sources from GitHub

@@ -1,7 +1,7 @@
 From 4d8fa51ba4281623fd6e3d09db474e640b08f2bf Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 15:57:07 +0200
-Subject: [PATCH 1/5] rk3326: add the XiFan RF35H device tree
+Subject: [PATCH 1/6] rk3326: add the XiFan RF35H device tree
 
 The XiFan RF35H (sold as XF35H too): RK3326, 640x480 MIPI-DSI panel on
 the generic-dsi driver, RK817 PMIC, RK915 Wi-Fi, two sticks on one SARADC
@@ -38,7 +38,7 @@ Claude-Session: https://claude.ai/code/session_019W6m4A3E7pevQ1bs91jPmM
 
 diff --git a/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts b/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts
 new file mode 100644
-index 0000000..124627f
+index 00000000..124627f0
 --- /dev/null
 +++ b/board/batocera/rockchip/rk3326/dts/rockchip/rk3326-xifan-rf35h.dts
 @@ -0,0 +1,984 @@
@@ -1027,7 +1027,7 @@ index 0000000..124627f
 +	};
 +};
 diff --git a/configs/batocera-rk3326.board b/configs/batocera-rk3326.board
-index 370334f..b8104df 100644
+index 370334f1..b8104df9 100644
 --- a/configs/batocera-rk3326.board
 +++ b/configs/batocera-rk3326.board
 @@ -23,7 +23,7 @@ BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y

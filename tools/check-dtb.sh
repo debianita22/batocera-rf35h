@@ -13,6 +13,9 @@
 #   - compila rocknix-joypad e rk915 alla versione e con le patch dei loro
 #     pacchetti (moduli esterni, cross gcc aarch64): nessun errore, e il joypad
 #     contiene la patch del motore su GPIO
+#   - compila con W=1 ogni file .c del kernel che la serie upstream/ tocca
+#     (dw-mipi-dsi.c): la patch si applica, il file compila e non aggiunge
+#     avvisi rispetto al file senza patch
 #
 # Serve quando si sposta batocera.pin: se Batocera cambia kernel, patch o
 # driver, ce ne si accorge qui e non dopo ore di build. Il DTB resta in
@@ -88,6 +91,30 @@ if grep -q 'rk3326-xifan-rf35h\.dts' "$LOG"; then
 fi
 cp "$K/arch/arm64/boot/dts/rockchip/rk3326-xifan-rf35h.dtb" "$WORK/"
 echo "    $WORK/rk3326-xifan-rf35h.dtb ($(stat -c%s "$WORK/rk3326-xifan-rf35h.dtb") byte)"
+
+say "File del kernel toccati dalla serie upstream (W=1)"
+# i .c che le patch kernel di upstream/ cambiano, compilati con e senza la
+# patch: stesso numero di avvisi. Le patch della board sono gia' applicate: per
+# il confronto si toglie e rimette solo quella.
+while read -r up; do
+	for pf in $(grep -oE '^\+\+\+ b/board/batocera/rockchip/rk3326/linux_patches/[^ ]+\.patch' "$up" | sed 's|^+++ b/||'); do
+		for f in $(grep -oE '^\+\+\+ b/[^ ]+\.c' "$TREE/$pf" | sed 's|^+++ b/||'); do
+			obj="${f%.c}.o"
+			LOG="$WORK/$(basename "$obj").log"
+			rm -f "$K/$obj"
+			"${MAKEK[@]}" W=1 "$obj" > "$LOG" 2>&1 || { cat "$LOG"; die "$f non compila con $(basename "$pf")"; }
+			with=$(grep -c 'warning:' "$LOG" || true)
+			patch -R -p1 -s -d "$K" < "$TREE/$pf" || die "$(basename "$pf") non si toglie"
+			rm -f "$K/$obj"
+			"${MAKEK[@]}" W=1 "$obj" > "$LOG.orig" 2>&1 || { cat "$LOG.orig"; die "$f non compila senza la patch"; }
+			without=$(grep -c 'warning:' "$LOG.orig" || true)
+			patch -p1 -s -d "$K" < "$TREE/$pf" || die "$(basename "$pf") non si riapplica"
+			rm -f "$K/$obj"
+			[ "$with" -le "$without" ] || { grep 'warning:' "$LOG"; die "$(basename "$pf") aggiunge avvisi a $f ($with contro $without)"; }
+			echo "    $f con $(basename "$pf"): compila, avvisi $with (senza patch $without)"
+		done
+	done
+done < <(ls "$O"/upstream/*.patch)
 
 say "Moduli esterni"
 "${MAKEK[@]}" modules_prepare

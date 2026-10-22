@@ -1,4 +1,4 @@
-From 47382a80fe9835c6b08933b236e9aa5d52b75142 Mon Sep 17 00:00:00 2001
+From e889be71291e94cf7f8e34e015592b82c36390ef Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Mon, 5 Oct 2026 09:45:47 +0200
 Subject: [PATCH 5/6] cargo-c: build from the crates.io release and its

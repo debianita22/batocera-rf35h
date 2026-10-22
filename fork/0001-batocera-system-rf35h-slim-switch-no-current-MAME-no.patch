@@ -1,4 +1,4 @@
-From 95cdf2709906148f53c2d65f6b1cde63ca6ce76c Mon Sep 17 00:00:00 2001
+From 0460ad36fddef064e98e157298910653e6d057ed Mon Sep 17 00:00:00 2001
 From: Domenico D'Arrigo <d.darrigo@outlook.it>
 Date: Sun, 4 Oct 2026 16:02:11 +0200
 Subject: [PATCH 1/6] batocera-system: rf35h slim switch (no current MAME, no
