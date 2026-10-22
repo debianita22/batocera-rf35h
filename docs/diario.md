@@ -356,7 +356,15 @@ Pre-release perche' non ancora provata sulla console: `releases/latest` non
 la vede, quindi nessuna console la riceverebbe come aggiornamento (con solo
 pre-release il controllo da EmulationStation non trova niente, e basta).
 Quando la prova sulla console va bene si promuove, o si pubblica `v0.1.0`.
-Tempo previsto: tre parti, circa 15-16 ore.
+
+**Pubblicata il 22/10 alle 08:40 UTC**, senza intoppi: quattro parti (227,
+491, 742, immagini), 18 ore di runner in tutto, `verify-image` Conforme,
+`batocera.version` `44-dev-rf35h-v0.1.0-rc1 2026/10/22 04:23`. Release:
+https://github.com/debianita22/batocera-rf35h/releases/tag/v0.1.0-rc1 con
+`batocera-rk3326-rf35h-44-20261022.img.gz` (1,6 GB), `boot.tar.xz` (1,6 GB)
+con `.md5`, `batocera.version`, `SHA256SUMS`, `verify-image.txt`. Lo
+scaricamento diretto dalla release funziona (provato `batocera.version`
+dall'URL `releases/download/v0.1.0-rc1/`). Non ancora provata sulla console.
 
 ## Revisione indipendente (5/10/2026)
 
