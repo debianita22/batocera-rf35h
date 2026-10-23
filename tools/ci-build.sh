@@ -106,6 +106,15 @@ cmd_prepare() {
 	say "Batocera con le patch in ${TREE}"
 	RF35H_UPDATE_REPO="${GITHUB_REPOSITORY:-debianita22/batocera-rf35h}" "$O/tools/apply.sh" --tree "${TREE}"
 	mkdir -p "${WORKD}/output" "${WORKD}/dl" "${WORKD}/ccache"
+	# La ccache passa da una parte all'altra e da una build all'altra (il
+	# suo stato e' nel tarball): a 5 GB (il max_size che buildroot le mette
+	# alla prima build) la v0.1.0-rc2 era al 93%, e CCACHE_MAXSIZE nell'ambiente
+	# del container non si vedeva nelle statistiche. Il limite sta nel suo
+	# ccache.conf, che buildroot rispetta.
+	if ! grep -qs "^max_size = ${CCACHE_MAXSIZE:-8.0G}$" "${WORKD}/ccache/ccache.conf"; then
+		sed -i '/^max_size/d' "${WORKD}/ccache/ccache.conf" 2>/dev/null || true
+		echo "max_size = ${CCACHE_MAXSIZE:-8.0G}" >> "${WORKD}/ccache/ccache.conf"
+	fi
 
 	say "Container di build"
 	# Lo stesso container in tutte le parti: la parte 1 scrive in

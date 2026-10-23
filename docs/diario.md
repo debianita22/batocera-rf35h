@@ -433,6 +433,17 @@ legge solo la propria cartella).
 
 Rilanciata la release `v0.1.0-rc2` da capo (una release non si riprende).
 
+**Pubblicata il 23/10 alle 06:34 UTC** (run 39885843892, commit babc68a):
+tutta in **una parte**, 268 minuti, con la ccache piena al 93% e il 67% di
+hit; `verify-image` Conforme; `batocera.version` `44-dev-rf35h-v0.1.0-rc2
+2026/10/23 06:43`. E' la prima immagine col fix DSI (upstream/0006):
+https://github.com/debianita22/batocera-rf35h/releases/tag/v0.1.0-rc2.
+La ccache era a 4,7 GB su 5: il `CCACHE_MAXSIZE=6G` nell'ambiente del
+container non si vedeva nelle statistiche (max 5.0 GiB, il valore che
+buildroot mette nel `ccache.conf` alla prima build), quindi `prepare` ora
+scrive `max_size = 8.0G` nel `ccache.conf` della cache, che viaggia con lo
+stato. Lo stato cresce di qualche GB; le build da zero restano veloci.
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e

@@ -48,7 +48,7 @@ jobs:
       RF35H_CONTAINER: rf35h-build
       RF35H_REBUILD: ${{ inputs.rebuild }}
       # 6 GB: stare nella cache delle actions (10 GB per repository)
-      CCACHE_MAXSIZE: 6G
+      CCACHE_MAXSIZE: 8.0G
       # minuti dall'inizio del job in cui la build deve fermarsi: il resto
       # (potatura, stato, upload) deve stare nelle 6 ore
       BUILD_MINUTES: 315
