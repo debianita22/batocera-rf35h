@@ -401,6 +401,38 @@ con `.md5`, `batocera.version`, `SHA256SUMS`, `verify-image.txt`. Lo
 scaricamento diretto dalla release funziona (provato `batocera.version`
 dall'URL `releases/download/v0.1.0-rc1/`). Non ancora provata sulla console.
 
+## Build v0.1.0-rc2: uzdoom e i .mk che leggono altre cartelle (23/10/2026)
+
+La build di release col fix DSI (run 39839749373) ha fatto 791 pacchetti
+nella parte 1 (ccache piena: 5,5 ore per quello che il 5/10 ne aveva
+chieste 15) e si e' fermata all'inizio della parte 2 su `uzdoom`, al
+configure: "Configuring incomplete, errors occurred!". L'errore vero di
+CMake non era nel rapporto (cercava `Error:` con i due punti; ora prende
+anche `CMake Error` con le righe dopo, `Configuring incomplete`, `Could NOT
+find`), ma la causa e' nel `.mk`:
+
+    UZDOOM_CONF_OPTS += -DIMPORT_EXECUTABLES="$(HOST_UZDOOM_BUILDDIR)/ImportExecutables.cmake"
+
+Il pacchetto target legge un file nella **cartella di build** di
+`host-uzdoom`, che era l'ultimo pacchetto della parte 1: la potatura l'aveva
+svuotata. Nella rc1 i due erano capitati nella stessa parte. Stesso schema
+dei `.la` di libtool (nfs-utils), ma stavolta scritto nei `.mk`.
+
+`tools/mk-refs.py`: per ogni pacchetto configurato legge il suo `.mk` e
+cerca `$(<ALTRO>_BUILDDIR)`, `$(<ALTRO>_DIR)`, `$(<ALTRO>_SRCDIR)` di un
+altro pacchetto configurato, tenendo conto di quale pacchetto definisce la
+riga (la variante host e' un altro pacchetto). Sui nostri 847: `host-uzdoom`
+(uzdoom), `host-icu` (icu, `--with-cross-build`), `host-gcc-final`
+(gcc-final), `host-raze` e `host-ecwolf` (raze, ecwolf), piu'
+`alllinuxfirmwares` e `wireless-regdb` (batocera-initramfs, gia' nella
+lista fissa). `prepare` lo scrive in `W/keep.txt`, la potatura (`-K`) li
+lascia interi, `unpack` li cura se uno stato vecchio li porta potati.
+`test-ci-build.sh` 26/26 coi casi nuovi (host-uzdoom intero, curato da
+unpack, mk-refs.py su .mk finti: prende host-uzdoom e host-icu, non chi
+legge solo la propria cartella).
+
+Rilanciata la release `v0.1.0-rc2` da capo (una release non si riprende).
+
 ## Revisione indipendente (5/10/2026)
 
 Un agente che non aveva visto il lavoro ha controllato serie, script e
@@ -483,7 +515,7 @@ fallisce.
 
 Stato dei test (tutti in `ci-check.sh`, quindi a ogni push e prima di ogni
 build): `test-upgrade` 12, `test-verify-image` 26 (l'immagine giusta e 25
-mutazioni), `test-ci-build` 23, `test-image-step` 9.
+mutazioni), `test-ci-build` 26, `test-image-step` 9.
 
 Cercati anche, nei .mk degli 847 pacchetti, scaricamenti fuori dalla fase di
 download (che, come `cargo-c`, prenderebbero l'ultima versione di qualcosa):

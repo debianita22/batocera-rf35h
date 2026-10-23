@@ -53,6 +53,10 @@ fake_tree() {
 	pkg configgen-local rsynced configured built
 	pkg util-linux-2.41.4 "${all[@]}"
 	pkg libpcap-1.10.6 "${all[@]}"
+	# W/keep.txt (tools/mk-refs.py in prepare): uzdoom legge la cartella di
+	# build di host-uzdoom
+	pkg host-uzdoom-5.0.3 downloaded extracted patched configured built host_installed installed
+	echo "host-uzdoom-5.0.3" > "$T/w/keep.txt"
 	mkdir -p "$b/buildroot-config"; echo conf > "$b/buildroot-config/auto.conf"
 	# il sysroot: libmount.la rimanda alla cartella di build di util-linux
 	# (col percorso che ha dentro al container), un .pc no
@@ -71,7 +75,7 @@ fake_tree() {
 	mkdir -p "$T/w/work/output/rf35h/host/bin"; echo gcc > "$T/w/work/output/rf35h/host/bin/gcc"
 	echo cache > "$T/w/work/ccache/entry"
 	echo "batoceralinux/batocera.linux-build@sha256:0123" > "$T/w/work/container.txt"
-	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" "util-linux 2.41.4" "libpcap 1.10.6" "host-gcc-final 14.3.0" > "$T/w/packages.txt"
+	printf '%s\n' "bar 2.0" "foo 1.0" "host-baz 3" "linux 7.2.8" "python3 3.14.5" "linux-headers 7.2.8" "python3-configobj 5.0.8" "qux 0.1" "configgen local" "util-linux 2.41.4" "libpcap 1.10.6" "host-gcc-final 14.3.0" "host-uzdoom 5.0.3" > "$T/w/packages.txt"
 }
 
 echo "==> pack e unpack"
@@ -91,6 +95,7 @@ b="$T/w/work/output/rf35h/build"
 [ ! -e "$b/linux-headers-7.2.8/src" ] && [ ! -e "$b/python3-configobj-5.0.8/src" ] && ok "linux-headers e python3-configobj potati (nome esatto)" || bad "linux-headers o python3-configobj tenuti interi"
 [ -f "$b/util-linux-2.41.4/src/a.o" ] && ok "util-linux intero (libmount.la del sysroot rimanda alla sua cartella di build)" || bad "util-linux potato"
 [ ! -e "$b/libpcap-1.10.6/src" ] && ok "libpcap potato (il suo .pc non rimanda a build/)" || bad "libpcap tenuto intero"
+[ -f "$b/host-uzdoom-5.0.3/src/a.o" ] && ok "host-uzdoom intero (in W/keep.txt: il .mk di uzdoom legge la sua cartella)" || bad "host-uzdoom potato"
 [ ! -e "$b/host-gcc-final-14.3.0/src" ] && [ -f "$b/host-gcc-final-14.3.0/.stamp_installed" ] && ok "host-gcc-final potato (libstdc++.la ha solo un -L nella sua cartella di build)" || bad "host-gcc-final: $(ls -A "$b/host-gcc-final-14.3.0" 2>&1 | tr '\n' ' ')"
 inc="$T/w/work/output/rf35h/host/lib/gcc/aarch64-buildroot-linux-gnu/14.3.0/include-fixed"
 [ ! -e "$inc/rga" ] && [ -f "$inc/limits.h" ] && [ -f "$inc/syslimits.h" ] && [ -f "$inc/README" ] && ok "include-fixed: rga/RgaApi.h (copiato dal sysroot) tolto, limits.h e syslimits.h restano" || bad "include-fixed: $(cd "$inc" && find . -type f | tr '\n' ' ')"
@@ -106,12 +111,37 @@ inc="$T/w/work/output/rf35h/host/lib/gcc/aarch64-buildroot-linux-gnu/14.3.0/incl
 echo "==> stato vecchio: pacchetto richiesto gia' potato"
 fake_tree
 rm -rf "$b/util-linux-2.41.4/src" "$b/util-linux-2.41.4/Makefile"	# potato da una CI che non guardava i .la
+rm -rf "$b/host-uzdoom-5.0.3/src" "$b/host-uzdoom-5.0.3/Makefile"	# potato da una CI che non guardava i .mk
 [ "$(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h")" = "util-linux-2.41.4" ] && ok "prune-build.sh -r elenca util-linux-2.41.4 e non host-gcc-final" || bad "prune-build.sh -r: $(ci "$O/tools/prune-build.sh" -r "$T/w/work/output/rf35h" | tr '\n' ' ')"
 mkdir -p "$T/w/dl-state"; (cd "$T/w/work" && tar -cf - output ccache container.txt | zstd -q -3 > "$T/w/dl-state/state-1.tar.zst")
 rm -rf "$T/w/work"
 ci "$O/tools/ci-build.sh" unpack 1 > "$T/unpack2.log" 2>&1 || { cat "$T/unpack2.log"; exit 1; }
 [ ! -e "$b/util-linux-2.41.4" ] && grep -q "util-linux-2.41.4: potato ma richiesto" "$T/unpack2.log" && ok "unpack toglie util-linux potato perche' si rifaccia" || { bad "unpack: util-linux potato lasciato li'"; sed 's/^/      /' "$T/unpack2.log"; }
+[ ! -e "$b/host-uzdoom-5.0.3" ] && grep -q "host-uzdoom-5.0.3: potato ma richiesto" "$T/unpack2.log" && ok "unpack toglie host-uzdoom potato (W/keep.txt) perche' si rifaccia" || bad "unpack: host-uzdoom potato lasciato li'"
 [ -f "$b/foo-1.0/.stamp_installed" ] && ok "gli altri pacchetti potati restano" || bad "foo-1.0 tolto"
+
+echo "==> mk-refs.py"
+mkdir -p "$T/mk/package/a/uzdoom" "$T/mk/package/a/foo" "$T/mk/buildroot/package/icu"
+cat > "$T/mk/package/a/uzdoom/uzdoom.mk" <<'MK'
+UZDOOM_VERSION = 5.0.3
+HOST_UZDOOM_CONF_OPTS += -DTOOLS_ONLY=ON
+define HOST_UZDOOM_INSTALL_CMDS
+	cp $(@D)/tools $(HOST_DIR)/bin
+endef
+UZDOOM_CONF_OPTS += -DIMPORT_EXECUTABLES="$(HOST_UZDOOM_BUILDDIR)/ImportExecutables.cmake"
+UZDOOM_DEPENDENCIES = host-uzdoom foo
+MK
+cat > "$T/mk/package/a/foo/foo.mk" <<'MK'
+FOO_VERSION = 1.0
+FOO_CONF_OPTS = --with-bar=$(FOO_DIR)/bar --prefix=$(STAGING_DIR)/usr
+MK
+cat > "$T/mk/buildroot/package/icu/icu.mk" <<'MK'
+ICU_VERSION = 78.2
+ICU_CONF_OPTS = --with-cross-build=$(HOST_ICU_DIR)
+MK
+echo '{"uzdoom":{"type":"target","version":"5.0.3"},"host-uzdoom":{"type":"host","version":"5.0.3"},"foo":{"type":"target","version":"1.0"},"icu":{"type":"target","version":"78.2"},"host-icu":{"type":"host","version":"78.2"},"skeleton":{"type":"target"}}' > "$T/mk/show-info.json"
+got="$(python3 "$O/tools/mk-refs.py" "$T/mk/show-info.json" "$T/mk" | tr '\n' ';')"
+[ "$got" = "host-icu 78.2 <- icu;host-uzdoom 5.0.3 <- uzdoom;" ] && ok "mk-refs.py: host-uzdoom e host-icu, non foo (legge solo la sua cartella)" || bad "mk-refs.py: $got"
 
 echo "==> rebuild"
 fake_tree

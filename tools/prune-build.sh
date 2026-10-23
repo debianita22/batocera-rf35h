@@ -1,12 +1,16 @@
 #!/bin/bash
 # prune-build.sh - toglie i file di compilazione dei pacchetti gia' finiti.
 #
-#   tools/prune-build.sh [-n] OUTPUT
+#   tools/prune-build.sh [-n] [-K FILE] OUTPUT
 #   tools/prune-build.sh -r OUTPUT
 #
 # OUTPUT e' la cartella di Buildroot (quella con build/, host/, target/;
-# per tools/build.sh: WORK/output/rf35h). -n elenca soltanto. -r elenca
-# soltanto i pacchetti a cui altri file rimandano (vedi sotto).
+# per tools/build.sh: WORK/output/rf35h). -n elenca soltanto. -K FILE: altre
+# cartelle da lasciare intere, un nome (<pacchetto>-<versione>) per riga: la
+# CI ci mette quelle che il .mk di un altro pacchetto legge (tools/mk-refs.py:
+# uzdoom configura con $(HOST_UZDOOM_BUILDDIR)/ImportExecutables.cmake, icu
+# con host-icu, gcc-final con host-gcc-final). -r elenca soltanto i pacchetti
+# a cui altri file rimandano (vedi sotto).
 #
 # Un pacchetto e' finito quando la sua cartella in build/ ha .stamp_installed,
 # l'ultimo stamp di Buildroot (dopo host, staging, target e images). Da li' in
@@ -46,12 +50,16 @@
 # pacchetto potato si ricostruisce con "<pacchetto>-dirclean" e una build.
 set -euo pipefail
 
-DRY=no; LIST=no
-case "${1:-}" in
-	-n) DRY=yes; shift ;;
-	-r) LIST=yes; shift ;;
-esac
-OUT="${1:?uso: prune-build.sh [-n|-r] OUTPUT}"
+DRY=no; LIST=no; KEEPFILE=""
+while [ $# -gt 1 ]; do
+	case "$1" in
+		-n) DRY=yes; shift ;;
+		-r) LIST=yes; shift ;;
+		-K) KEEPFILE="$2"; shift 2 ;;
+		*) break ;;
+	esac
+done
+OUT="${1:?uso: prune-build.sh [-n] [-K FILE] OUTPUT | -r OUTPUT}"
 BUILD="$OUT/build"
 [ -d "$BUILD" ] || { echo "prune: $BUILD non esiste" >&2; exit 1; }
 
@@ -68,6 +76,9 @@ referenced() {
 		| sed -E 's|^/build/([^/]+)/.*|\1|' | sort -u
 }
 mapfile -t REFD < <(referenced)
+if [ -n "$KEEPFILE" ] && [ -f "$KEEPFILE" ]; then
+	mapfile -t -O "${#REFD[@]}" REFD < <(grep -v '^$' "$KEEPFILE")
+fi
 if [ "$LIST" = yes ]; then
 	[ "${#REFD[@]}" -eq 0 ] || printf '%s\n' "${REFD[@]}"
 	exit 0

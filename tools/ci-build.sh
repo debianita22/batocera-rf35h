@@ -145,10 +145,16 @@ cmd_prepare() {
 	make -s -C "${TREE}/buildroot" O="${cfg}" BR2_EXTERNAL="${TREE}" batocera-rf35h_defconfig >/dev/null 2>&1 \
 		|| die "make batocera-rf35h_defconfig"
 	# nome e versione: la cartella di un pacchetto e' build/<nome>-<versione>
-	make -s -C "${cfg}" show-info 2>/dev/null \
-		| python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(sorted("%s %s" % (k, v.get("version") or "") for k,v in d.items() if v.get("type") in ("target","host"))))' \
-		> "${W}/packages.txt"
+	make -s -C "${cfg}" show-info 2>/dev/null > "${W}/show-info.json"
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("\n".join(sorted("%s %s" % (k, v.get("version") or "") for k,v in d.items() if v.get("type") in ("target","host"))))' \
+		"${W}/show-info.json" > "${W}/packages.txt"
 	echo "  $(wc -l < "${W}/packages.txt") pacchetti"
+	# le cartelle di build che il .mk di un altro pacchetto legge (uzdoom
+	# configura con $(HOST_UZDOOM_BUILDDIR)/ImportExecutables.cmake): la
+	# potatura tra le parti le lascia intere, W/keep.txt (tools/mk-refs.py)
+	python3 "$O/tools/mk-refs.py" "${W}/show-info.json" "${TREE}" > "${W}/mk-refs.txt"
+	awk '{print $1 ($2 != "" ? "-" $2 : "")}' "${W}/mk-refs.txt" > "${W}/keep.txt"
+	echo "  cartelle di build lette da altri pacchetti: $(tr '\n' ' ' < "${W}/keep.txt")"
 	rebuild
 	# shellcheck disable=SC1091
 	. "${TREE}/.rf35h-overlay"
@@ -228,8 +234,10 @@ failure_report() {
 	echo "ultimo passo: $(tail -n 20000 "${log}" | plain | grep -a '^>>> ' | tail -1)"
 	echo "--- righe di errore"
 	tail -n 3000 "${log}" | plain \
-		| grep -aE '(^|[[:space:]])(error|ERROR|Error)(\[[A-Z0-9]+\])?:|^error|fatal( error)?:|\*\*\* |Killed|No space left|Illegal instruction|undefined reference|could not compile|failed to run|panicked at' \
+		| grep -aE '(^|[[:space:]])(error|ERROR|Error)(\[[A-Z0-9]+\])?:|^error|fatal( error)?:|\*\*\* |Killed|No space left|Illegal instruction|undefined reference|could not compile|failed to run|panicked at|CMake Error|Configuring incomplete|Could NOT find' \
 		| grep -avE -- '-W(no-)?error|supports arguments' | cut -c1-250 | tail -20
+	# un errore di CMake sta nelle righe dopo "CMake Error at ..."
+	tail -n 3000 "${log}" | plain | grep -aA6 'CMake Error' | cut -c1-250 | tail -30
 	echo "--- coda del log"
 	tail -n 400 "${log}" | plain | awk 'length($0) < 600' | cut -c1-250 | tail -30
 }
@@ -247,7 +255,7 @@ cmd_build() {
 	(
 		while sleep 300; do
 			if [ "$(gb "${W}")" -lt 40 ]; then
-				"$O/tools/prune-build.sh" "${OUT}" >> "${W}/prune.log" 2>&1 || true
+				"$O/tools/prune-build.sh" -K "${W}/keep.txt" "${OUT}" >> "${W}/prune.log" 2>&1 || true
 			fi
 		done
 	) &
@@ -319,7 +327,7 @@ cmd_pack() {
 	paths
 	local n="${1:?numero della parte}" kind="${2:-}"
 	say "Stato della parte ${n}${kind:+ (build fallita)}"
-	"$O/tools/prune-build.sh" "${OUT}"
+	"$O/tools/prune-build.sh" -K "${W}/keep.txt" "${OUT}"
 	local t0; t0="$(date +%s)"
 	tar -C "${WORKD}" -cf - output ccache container.txt | zstd -q -T0 -3 > "${W}/state-${n}.tar.zst"
 	local size; size="$(du -h "${W}/state-${n}.tar.zst" | cut -f1)"
@@ -351,9 +359,10 @@ cmd_unpack() {
 		fi
 	done
 	# Un pacchetto finito ma potato a cui rimanda un file di host/ (un .la
-	# di libtool con la sua cartella di build in dependency_libs): chi lo
-	# usa cercherebbe la' e fallirebbe (nfs-utils con util-linux). Lo stato
-	# puo' venire da una potatura che non lo sapeva: si rifa' da capo.
+	# di libtool con la sua cartella di build in dependency_libs: nfs-utils
+	# con util-linux) o il .mk di un altro pacchetto (W/keep.txt: uzdoom con
+	# host-uzdoom): chi lo usa cercherebbe la' e fallirebbe. Lo stato puo'
+	# venire da una potatura che non lo sapeva: si rifa' da capo.
 	# Mai la toolchain: un gcc rifatto su un sysroot pieno si copia in
 	# include-fixed header di altri pacchetti (vedi sotto).
 	local name
@@ -365,7 +374,7 @@ cmd_unpack() {
 			echo "  ${name}: potato ma richiesto da file di host/, da rifare"
 			rm -rf "${d}"
 		fi
-	done < <("$O/tools/prune-build.sh" -r "${OUT}")
+	done < <("$O/tools/prune-build.sh" -r "${OUT}"; [ -f "${W}/keep.txt" ] && cat "${W}/keep.txt")
 	fix_include_fixed
 	echo "  $(progress)"
 }
